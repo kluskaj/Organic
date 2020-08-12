@@ -1,0 +1,18 @@
+#!/bin/bash -l
+#PBS -l walltime=09:30:00
+#PBS -l pmem=4gb
+#PBS -l partition=gpu
+#PBS -A lp_ganimgrec
+#PBS -N normalGanMoreEpochs
+#PBS -o $PBS_JOBID.stdout
+#PBS -e $PBS_JOBID.stderr
+#PBS -m abe
+#PBS -M rik.claes@student.kuleuven.be
+#PBS -l nodes=1:ppn=9:gpus=1:skylake
+
+
+export PATH=${VSC_DATA}/miniconda3/bin:${PATH}
+conda activate thesisCNN
+cd ${VSC_DATA}/summerjobTests/test1/
+cp ${VSC_DATA}/summerjobTests/TrainGAN.py .
+python ${VSC_DATA}/summerjobTests/TrainGAN.py
