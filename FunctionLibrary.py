@@ -369,14 +369,15 @@ returns:
     data likelihood cost function for the provided data
 
 """
-def dataLikeloss_FixedSparco(DataDir,filename,ImageSize,x = -0.44   *np.pi*0.001/(3600*180),  #coordinates of the secondary in radian
-y = -0.68   *np.pi*0.001/(3600*180),
-primFlux =59.7/100, #percentage of total flux contributed by primary
-secFlux = 0,#3.9/100 #percentage of total flux contributed by secondary
-denv = 0.42,
-dsec = -2,
-primaryDiameter = 0.5 * np.pi*0.001/(3600*180),
-spacialFreqPerPixel = (3600/0.07)*(180/np.pi),V2Artificial = None,CPArtificial = None):
+def dataLikeloss_FixedSparco(DataDir,filename,ImageSize,
+x,
+y,
+primFlux,
+secFlux,
+denv,
+dsec,
+primaryDiameter,
+spacialFreqPerPixel,V2Artificial = None,CPArtificial = None):
     dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)
@@ -399,8 +400,12 @@ spacialFreqPerPixel = (3600/0.07)*(180/np.pi),V2Artificial = None,CPArtificial =
     wavelCP = dataObj['wave'][1]
     wavelCP = tf.constant(wavelCP,dtype = tf.complex128) #conversion to tensor
      #divide u,v by this number to get the pixelcoordinate
-
-
+    x = x *np.pi*0.001/(3600*180)
+    y = y   *np.pi*0.001/(3600*180)
+    primFlux = primFlux/100
+    secFlux = secFlux/100
+    primaryDiameter = primaryDiameter * np.pi*0.001/(3600*180)
+    spacialFreqPerPixel = (3600/(0.01*ImageSize*pixelSize))*(180/np.pi)
     def offcenterPointFT(x,y,u,v):
         u = tf.constant(u,dtype = tf.complex128)
         v = tf.constant(v,dtype = tf.complex128)
@@ -797,6 +802,8 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , epochs = 21000,i
     discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
     discriminator.trainable =False
     Generator.trainable = True
+    Generator.add(Lambda(lambda x: 2*((x-K.min(x))/(K.max(x) -K.min(x)))-1 ))
+
     fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam)
     # initialize empty arrays to store the cost evolution
     diskyLoss = np.zeros(epochs)
