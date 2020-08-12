@@ -377,7 +377,8 @@ secFlux,
 denv,
 dsec,
 primaryDiameter,
-spacialFreqPerPixel,V2Artificial = None,CPArtificial = None):
+pixelSize,
+V2Artificial = None,CPArtificial = None):
     dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)

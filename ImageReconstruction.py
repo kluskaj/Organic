@@ -46,7 +46,7 @@ filename = 'IRAS08544-4431_PIONIER_alloidata.fits'
 #sparco Parameters
 x = -0.44    #coordinates of the secondary in mas
 y = -0.68
-primFlux =59.7, #percentage of total flux contributed by primary
+primFlux =59.7 #percentage of total flux contributed by primary
 secFlux = 3.9 #percentage of total flux contributed by secondary
 denv = 0.42 # the spectral index of the environment
 dsec = -2, # the spectral index of the secondary
