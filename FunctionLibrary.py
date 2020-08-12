@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 mpl.use('Agg')# %matplotlib inline
 import tensorflow.keras.layers as layers
 from tensorflow.keras.models import Model,Sequential
-from tensorflow.keras.layers import Dense, Dropout, Input,Activation,LeakyReLU
+from tensorflow.keras.layers import Dense, Dropout, Input,Activation,LeakyReLU,Lambda
 #from keras.models import Model,Sequential
 #from tensorflow.keras.layers.advanced_activations import LeakyReLU
 from tensorflow.keras.optimizers import Adam
@@ -401,12 +401,12 @@ V2Artificial = None,CPArtificial = None):
     wavelCP = dataObj['wave'][1]
     wavelCP = tf.constant(wavelCP,dtype = tf.complex128) #conversion to tensor
      #divide u,v by this number to get the pixelcoordinate
-    x = x *np.pi*0.001/(3600*180)
-    y = y   *np.pi*0.001/(3600*180)
+    x = x*np.pi*0.001/(3600*180)
+    y = y*np.pi*0.001/(3600*180)
     primFlux = primFlux/100
     secFlux = secFlux/100
     primaryDiameter = primaryDiameter * np.pi*0.001/(3600*180)
-    spacialFreqPerPixel = (3600/(0.01*ImageSize*pixelSize))*(180/np.pi)
+    spacialFreqPerPixel = (3600/(0.001*ImageSize*pixelSize))*(180/np.pi)
     def offcenterPointFT(x,y,u,v):
         u = tf.constant(u,dtype = tf.complex128)
         v = tf.constant(v,dtype = tf.complex128)
@@ -599,7 +599,7 @@ returns:
     Makes various plots of both the components of the objective function and the total objective function itself
 
 """
-def plotEvolution(epoch,diskyLoss=[],fitLoss=[]):
+def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     # plots of both terms of the objective function and the total objective function itself as  a function of epoch
     fig1 = plt.figure()
     plt.plot(epoch,diskyLoss,label = r'$\mu f_{prior}$',c = 'b',alpha=0.5)
@@ -838,10 +838,8 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , epochs = 21000,i
         #plot the image contributing to the mean and variance
         if (e+1) % plotinterval== 0:
             plot_generated_images2(e, Generator,theOneNoiseVector,image_Size)
-    #save the genera in its final state
-    saveModel2(saveDir,modelName,Generator)
     #plot the loss evolution
-    plotEvolution(epoch,diskyLoss,fitLoss)
+    plotEvolution(epoch,hyperParam,diskyLoss,fitLoss)
     #plot and store the mean and variance image
     plotMeanAndSTD(mean,variance)
 
