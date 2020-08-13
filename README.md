@@ -35,47 +35,47 @@ these differ by having
 In the the results in the paper where produced in a conda environment with the following packages:
 Package                   version used             
 
-_libgcc_mutex             0.1                        main
-_tflow_select             2.1.0                       gpu
-absl-py                   0.9.0                    py36_0
-asn1crypto                1.3.0                    py36_0
-astor                     0.8.1                    pypi_0    pypi
-astropy                   4.0              py36h7b6447c_0
-attrs                     19.3.0                     py_0
-blas                      1.0                         mkl
-blinker                   1.4                      py36_0
-c-ares                    1.15.0            h7b6447c_1001
-ca-certificates           2020.1.1                      0
-cachetools                4.0.0                    pypi_0    pypi
-cairo                     1.14.12              h8948797_3
-certifi                   2019.11.28               py36_0
-cffi                      1.14.0           py36h2e261b9_0
-chardet                   3.0.4                 py36_1003
-click                     7.0                      py36_0
-cryptography              2.8              py36h1ba5d50_0
-cudatoolkit               10.1.243             h6bb024c_0
-cudnn                     7.6.5                cuda10.1_0
-cupti                     10.1.168                      0
-cycler                    0.10.0                   py36_0
-dbus                      1.13.12              h746ee38_0
-expat                     2.2.6                he6710b0_0
-fontconfig                2.13.0               h9420a91_0
-freetype                  2.9.1                h8a8886c_1
-fribidi                   1.0.5                h7b6447c_0
-gast                      0.2.2                    pypi_0    pypi
-glib                      2.63.1               h5a9c865_0
-google-auth               1.11.2                     py_0
-google-auth-oauthlib      0.4.1                      py_2
-google-pasta              0.1.8                      py_0
-graphite2                 1.3.13               h23475e2_0
-graphviz                  2.40.1               h21bd128_2
-grpcio                    1.27.2           py36hf8bcb03_0
-gst-plugins-base          1.14.0               hbbd80ab_1
-gstreamer                 1.14.0               hb453b48_1
-h5py                      2.10.0           py36h7918eee_0
-harfbuzz                  1.8.8                hffaf4a1_0
-hdf5                      1.10.4               hb1b8bf9_0
-hypothesis                5.5.4                      py_0
+-_libgcc_mutex             0.1                        main
+-_tflow_select             2.1.0                       gpu
+-absl-py                   0.9.0                    py36_0
+-asn1crypto                1.3.0                    py36_0
+-astor                     0.8.1                    pypi_0    pypi
+-astropy                   4.0              py36h7b6447c_0
+-attrs                     19.3.0                     py_0
+-blas                      1.0                         mkl
+-blinker                   1.4                      py36_0
+-c-ares                    1.15.0            h7b6447c_1001
+-ca-certificates           2020.1.1                      0
+-cachetools                4.0.0                    pypi_0    pypi
+-cairo                     1.14.12              h8948797_3
+-certifi                   2019.11.28               py36_0
+-cffi                      1.14.0           py36h2e261b9_0
+-chardet                   3.0.4                 py36_1003
+-click                     7.0                      py36_0
+-cryptography              2.8              py36h1ba5d50_0
+-cudatoolkit               10.1.243             h6bb024c_0
+-cudnn                     7.6.5                cuda10.1_0
+-cupti                     10.1.168                      0
+-cycler                    0.10.0                   py36_0
+-dbus                      1.13.12              h746ee38_0
+-expat                     2.2.6                he6710b0_0
+-fontconfig                2.13.0               h9420a91_0
+-freetype                  2.9.1                h8a8886c_1
+-fribidi                   1.0.5                h7b6447c_0
+-gast                      0.2.2                    pypi_0    pypi
+-glib                      2.63.1               h5a9c865_0
+-google-auth               1.11.2                     py_0
+-google-auth-oauthlib      0.4.1                      py_2
+-google-pasta              0.1.8                      py_0
+-graphite2                 1.3.13               h23475e2_0
+-graphviz                  2.40.1               h21bd128_2
+-grpcio                    1.27.2           py36hf8bcb03_0
+-gst-plugins-base          1.14.0               hbbd80ab_1
+-gstreamer                 1.14.0               hb453b48_1
+-h5py                      2.10.0           py36h7918eee_0
+-harfbuzz                  1.8.8                hffaf4a1_0
+-hdf5                      1.10.4               hb1b8bf9_0
+-hypothesis                5.5.4                      py_0
 icu                       58.2                 h9c2bf20_1
 idna                      2.9                      pypi_0    pypi
 importlib_metadata        1.5.0                    py36_0
