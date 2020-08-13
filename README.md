@@ -32,7 +32,7 @@ these differ by having
 
 
 
-In the the results in the paper where produced in a conda environment with the following packages:
+The environment used to run the scripts is included as ImageReconstruction.yml , it includes the following packages:
 <pre>
 - Package                   version used             
 
