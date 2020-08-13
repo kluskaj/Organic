@@ -44,23 +44,23 @@ filename = 'IRAS08544-4431_PIONIER_alloidata.fits'
     #TODO: fourier space GAN/LOSS/reconstruction
 
 #sparco Parameters
-x = -0.44    #coordinates of the secondary in mas
-y = -0.68
-primFlux =59.7 #percentage of total flux contributed by primary
-secFlux = 3.9 #percentage of total flux contributed by secondary
+x = -0.44   #the right-ascention of a point source star, to be removed using sparco
+y = -0.68   #the declination of a point source star, to be removed using sparco
+UDflux =59.7 #the flux contribution of the a central resolved star, represented as a uniform disk (set to 0 for an unresloved point source)
+PointFlux = 3.9 # The flux contribution of a point source star
 denv = 0.42 # the spectral index of the environment
-dsec = -2, # the spectral index of the secondary
-primaryDiameter = 0.5 # the diameter of the primary if resolved
-pixelSize = 0.2734375 #pixel size in mas (currently same as thesis)
+dsec = -2, #  the spectral index of the point source star (the uniform disk source has a default index of 4)
+UDdiameter = 0.5 # the diameter of the resolved source
+pixelSize = 0.2734375 #pixel size in mas (currently same as thesis, yields an fov for an imagesize of 256)
 
 dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
 x,
 y,
-primFlux,
-secFlux,
+UDflux,
+PointFlux,
 denv,
 dsec,
-primaryDiameter,
+UDdiameteraryDiameter,
 pixelSize,
 V2Artificial = None,CPArtificial = None)
 
@@ -84,11 +84,11 @@ np.save('fitLoss',fitLoss)
 dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
     x,
     y,
-    primFlux,
-    secFlux,
+    UDflux,
+    PointFlux,
     denv,
     dsec,
-    primaryDiameter,
+    UDdiameteraryDiameter,
     pixelSize,
     forTraining = False
 )
