@@ -372,6 +372,8 @@ parameters:
     denv, the spectral index of the environment(disk)
     dsec, the spectral index of the point source star (the uniform disk source has a default index of 4)
     UDdiameter, the diameter of the resolved source
+    Pixelsize: the angular scale represented by one pixel in mas
+    forTraining: wether or not this instance of the dataLikelihood is to be used for training(True) or for calculating the chi2 (False)
     V2Artificial: numpy array holding the squared visibilities when using artificial dataset
     CPArtificial: numpy array holding the closure phases when using artificial dataset
 returns:
@@ -386,7 +388,8 @@ PointFlux,
 denv,
 dsec,
 UDdiameter,
-pixelSize,forTraining = True
+pixelSize,
+forTraining = True
 V2Artificial = None,CPArtificial = None):
     dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
     V2observed, V2err = dataObj['v2']
@@ -496,6 +499,7 @@ parameters:
     filename: name of the OIfits file to be used
     ImageSize: the number of pixels along one axis of the images being reconstructed
     pixelsize: size angular scale represented by a picel in mas
+    forTraining: wether or not this instance of the dataLikelihood is to be used for training(True) or for calculating the chi2 (False)
     V2Artificial: numpy array holding the squared visibilities when using artificial dataset
     CPArtificial: numpy array holding the closure phases when using artificial dataset
 returns:
