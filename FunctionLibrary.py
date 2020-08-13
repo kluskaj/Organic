@@ -363,6 +363,15 @@ dataLikeloss_FixedSparco
 parameters:
     DataDir: directory containing the oifits-file to be used. Only the baselines and errors are used in the case artificial datasets are used
     filename: name of the OIfits file to be used
+    ImageSize: the number of pixels along one axis of the images being reconstructed
+    pixelsize: size angular scale represented by a picel in mas
+    x: the right-ascention of a point source star, to be removed using sparco
+    y: the declination of a point source star, to be removed using sparco
+    UDflux: the flux contribution of the a central resolved star, represented as a uniform disk
+    PointFlux, The flux contribution of a point source star
+    denv, the spectral index of the environment(disk)
+    dsec, the spectral index of the point source star (the uniform disk source has a default index of 4)
+    UDdiameter, the diameter of the resolved source
     V2Artificial: numpy array holding the squared visibilities when using artificial dataset
     CPArtificial: numpy array holding the closure phases when using artificial dataset
 returns:
@@ -372,22 +381,20 @@ returns:
 def dataLikeloss_FixedSparco(DataDir,filename,ImageSize,
 x,
 y,
-primFlux,
-secFlux,
+UDflux,
+PointFlux,
 denv,
 dsec,
-primaryDiameter,
+UDdiameter,
 pixelSize,forTraining = True
 V2Artificial = None,CPArtificial = None):
     dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)
-    print(nV2)
     V2observed = tf.constant(V2observed)#conversion to tensor
     V2err = tf.constant(V2err)#conversion to tensor
     CPobserved, CPerr = dataObj['cp']
     nCP = len(CPerr)
-    print(nCP)
     CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
     CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
@@ -395,7 +402,7 @@ V2Artificial = None,CPArtificial = None):
         CPobserved = tf.constant(CPArtificial)
     u, u1, u2, u3 = dataObj['u']
     v, v1, v2, v3 = dataObj['v']
-    wavel0 = 1.65 *10**(-6) #TODO ask jaqcues what he used maybe, needs to be cast to tensor!!!
+    wavel0 = 1.65 *10**(-6)
     wavelV2 = dataObj['wave'][0]
     wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
     wavelCP = dataObj['wave'][1]
@@ -403,9 +410,9 @@ V2Artificial = None,CPArtificial = None):
      #divide u,v by this number to get the pixelcoordinate
     x = x*np.pi*0.001/(3600*180)
     y = y*np.pi*0.001/(3600*180)
-    primFlux = primFlux/100
-    secFlux = secFlux/100
-    primaryDiameter = primaryDiameter * np.pi*0.001/(3600*180)
+    UDflux = UDflux/100
+    PointFlux = PointFlux/100
+    UDdiameter = UDdiameter * np.pi*0.001/(3600*180)
     spacialFreqPerPixel = (3600/(0.001*ImageSize*pixelSize))*(180/np.pi)
     def offcenterPointFT(x,y,u,v):
         u = tf.constant(u,dtype = tf.complex128)
@@ -436,17 +443,17 @@ V2Artificial = None,CPArtificial = None):
 
     def compTotalCompVis(ftImages,ufunc,vfunc, wavelfunc):
         #to compute the radial coordinate in the uv plane so compute the ft of the primary, which is a uniform disk, so the ft is....
-        radii = np.pi*primaryDiameter*np.sqrt(ufunc**2 + vfunc**2)# tf.constant(np.pi*primaryDiameter*np.sqrt(ufunc**2 + vfunc**2))
+        radii = np.pi*UDdiameter*np.sqrt(ufunc**2 + vfunc**2)
         ftPrimary = tf.constant(2*sp.jv(1,radii)/(radii),dtype = tf.complex128)
         #see extra function
         ftSecondary = offcenterPointFT(x,y,ufunc,vfunc)
         # get the total visibility amplitudes
         VcomplDisk = bilinearInterp(ftImages,(vfunc/spacialFreqPerPixel)+int(ImageSize/2),(ufunc/spacialFreqPerPixel)+int(ImageSize/2))
         #equation 4 in sparco paper:
-        VcomplTotal = primFlux * ftPrimary* K.pow(wavelfunc/wavel0,-4)
-        VcomplTotal += secFlux * ftSecondary* K.pow(wavelfunc/wavel0,dsec)
-        VcomplTotal += (1-primFlux-secFlux) *VcomplDisk* K.pow(wavelfunc/wavel0, denv)
-        VcomplTotal = VcomplTotal/((primFlux*K.pow(wavelfunc/wavel0,-4))+(secFlux*K.pow(wavelfunc/wavel0,dsec)) +((1-primFlux-secFlux)*K.pow(wavelfunc/wavel0,denv)))
+        VcomplTotal = UDflux * ftPrimary* K.pow(wavelfunc/wavel0,-4)
+        VcomplTotal += PointFlux * ftSecondary* K.pow(wavelfunc/wavel0,dsec)
+        VcomplTotal += (1-UDflux-PointFlux) *VcomplDisk* K.pow(wavelfunc/wavel0, denv)
+        VcomplTotal = VcomplTotal/((UDflux*K.pow(wavelfunc/wavel0,-4))+(PointFlux*K.pow(wavelfunc/wavel0,dsec)) +((1-UDflux-PointFlux)*K.pow(wavelfunc/wavel0,denv)))
         return VcomplTotal
 
     def internalloss(y_true,y_pred):
@@ -478,6 +485,93 @@ V2Artificial = None,CPArtificial = None):
 
     return internalloss
 
+
+
+
+"""
+dataLikeloss_NoSparco
+
+parameters:
+    DataDir: directory containing the oifits-file to be used. Only the baselines and errors are used in the case artificial datasets are used
+    filename: name of the OIfits file to be used
+    ImageSize: the number of pixels along one axis of the images being reconstructed
+    pixelsize: size angular scale represented by a picel in mas
+    V2Artificial: numpy array holding the squared visibilities when using artificial dataset
+    CPArtificial: numpy array holding the closure phases when using artificial dataset
+returns:
+    data likelihood cost function for the provided data
+
+"""
+def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = True,V2Artificial = None,CPArtificial = None):
+    dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
+    V2observed, V2err = dataObj['v2']
+    nV2 = len(V2err)
+    V2observed = tf.constant(V2observed)#conversion to tensor
+    V2err = tf.constant(V2err)#conversion to tensor
+    CPobserved, CPerr = dataObj['cp']
+    nCP = len(CPerr)
+    CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
+    CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
+    if V2Artificial is not None and CPArtificial is not None:
+        V2observed = tf.constant(V2Artificial)
+        CPobserved = tf.constant(CPArtificial)
+    u, u1, u2, u3 = dataObj['u']
+    v, v1, v2, v3 = dataObj['v']
+    wavelV2 = dataObj['wave'][0]
+    wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
+    wavelCP = dataObj['wave'][1]
+    wavelCP = tf.constant(wavelCP,dtype = tf.complex128) #conversion to tensor
+    spacialFreqPerPixel = (3600/(0.001*ImageSize*pixelSize))*(180/np.pi)
+
+    #u,v must be provided in pixel number!!!
+    def bilinearInterp(grid,ufunc,vfunc):
+        ubelow = np.floor(ufunc).astype(int)
+        vbelow = np.floor(vfunc).astype(int)
+        uabove = ubelow +1
+        vabove = vbelow +1
+        coords = [[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]]
+        interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
+        coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
+        interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
+        coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
+        interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
+        coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
+        interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
+        return interpValues
+
+
+    def internalloss(y_true,y_pred):
+        #compute the fourier transform of the images
+        y_pred = (tf.squeeze(y_pred,axis = 3) +1)/2   #/K.sum(K.sum(y_pred,axis =2),axis =1)
+        y_pred = tf.cast((y_pred),tf.complex128)
+        y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
+        ftImages = tf.signal.fft2d(y_pred)#is complex!!
+        ftImages = tf.signal.fftshift(ftImages,axes=(1,2))
+        coordsMax = [[[[0,int(ImageSize/2),int(ImageSize/2)]]]]
+        ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
+        complexV  = bilinearInterp(ftImages,(v/spacialFreqPerPixel)+int(ImageSize/2),(u/spacialFreqPerPixel)+int(ImageSize/2))
+        #VcomplForV2 = compTotalCompVis(ftImages,u,v,wavelV2)
+        V2generated = tf.math.abs(complexV)**2# computes squared vis for the generated images!!!!!!!!! use pow again!!!!!!!
+
+        V2Chi2Terms = K.pow(V2observed - V2generated,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
+        #V2Chi2Terms = V2Chi2Terms
+        V2loss = K.sum(V2Chi2Terms,axis=1) #the squared visibility contribution to the loss
+
+        complexV1  = bilinearInterp(ftImages,(v1/spacialFreqPerPixel)+int(ImageSize/2),(u1/spacialFreqPerPixel)+int(ImageSize/2))
+        CPgenerated  = tf.math.angle(complexV1)
+        complV2  = bilinearInterp(ftImages,(v2/spacialFreqPerPixel)+int(ImageSize/2),(u2/spacialFreqPerPixel)+int(ImageSize/2))
+        CPgenerated += tf.math.angle(complexV2)
+        complV3  = bilinearInterp(ftImages,(v2/spacialFreqPerPixel)+int(ImageSize/2),(u2/spacialFreqPerPixel)+int(ImageSize/2))
+        CPgenerated -= tf.math.angle(compTotalCompVis(ftImages,u3,v3,wavelCP))
+        CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
+        CPloss = K.sum(CPchi2Terms,axis=1)
+
+        lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
+        if forTraining = True:
+            return  tf.cast(lossValue,tf.float32)
+        else: return lossValue, V2loss , CPloss
+
+    return internalloss
 
 """
 adjustedCrossEntropy
