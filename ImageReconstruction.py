@@ -20,7 +20,7 @@ NoiseLength = 150
 RandomWalkStepSize = 0.5
 alterationInterval = 500
 plotinterval = 3000
-epochs = 21000
+epochs = 30000
 optimizer=Adam(learning_rate=0.0001,amsgrad=False)
 #in order to load artificial datasets in a numpy format
 dirV2 =os.path.expandvars('${VSC_DATA}/CNN/TrainingDoubleLossGen/V2ModelImage6_gausianNoise_IRAS08544baselines.npy')
@@ -77,4 +77,18 @@ np.save('varianceImage',Image)
 #store the numpy arrays for further use
 np.save('diskyLoss',diskyLoss)
 np.save('fitLoss',fitLoss)
-#!!!!!!!!!!!!!!!!!!!!!!! todo keep batchsize at one for the reconsruction!!!!!!!!!!!!!!
+
+
+#print the data likelihood terms for the reconstructed images
+# first set up the dataLikelihood to return all of its components
+dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
+    x,
+    y,
+    primFlux,
+    secFlux,
+    denv,
+    dsec,
+    primaryDiameter,
+    pixelSize,
+    forTraining = False
+)

@@ -377,7 +377,7 @@ secFlux,
 denv,
 dsec,
 primaryDiameter,
-pixelSize,
+pixelSize,forTraining = True
 V2Artificial = None,CPArtificial = None):
     dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
     V2observed, V2err = dataObj['v2']
@@ -472,7 +472,10 @@ V2Artificial = None,CPArtificial = None):
         CPloss = K.sum(CPchi2Terms,axis=1)
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
-        return  tf.cast(lossValue,tf.float32)
+        if forTraining = True:
+            return  tf.cast(lossValue,tf.float32)
+        else: return lossValue, V2loss , CPloss
+
     return internalloss
 
 
