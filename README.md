@@ -35,7 +35,7 @@ these differ by having
 In the the results in the paper where produced in a conda environment with the following packages:
 - Package                   version used             
 
-- _libgcc_mutex           $\qquad$  0.1            $\qquad$            main
+- _libgcc_mutex          ;&  0.1            ;&           main
 - _tflow_select             2.1.0                       gpu
 - absl-py                   0.9.0                    py36_0
 - asn1crypto                1.3.0                    py36_0
