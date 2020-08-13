@@ -35,18 +35,18 @@ these differ by having
 In the the results in the paper where produced in a conda environment with the following packages:
 Package                   version used             
 
--_libgcc_mutex             0.1                        main
--_tflow_select             2.1.0                       gpu
--absl-py                   0.9.0                    py36_0
--asn1crypto                1.3.0                    py36_0
--astor                     0.8.1                    pypi_0    pypi
--astropy                   4.0              py36h7b6447c_0
--attrs                     19.3.0                     py_0
--blas                      1.0                         mkl
--blinker                   1.4                      py36_0
--c-ares                    1.15.0            h7b6447c_1001
--ca-certificates           2020.1.1                      0
--cachetools                4.0.0                    pypi_0    pypi
+- _libgcc_mutex             0.1                        main
+- _tflow_select             2.1.0                       gpu
+- absl-py                   0.9.0                    py36_0
+- asn1crypto                1.3.0                    py36_0
+- astor                     0.8.1                    pypi_0    pypi
+- astropy                   4.0              py36h7b6447c_0
+- attrs                     19.3.0                     py_0
+- blas                      1.0                         mkl
+- blinker                   1.4                      py36_0
+- c-ares                    1.15.0            h7b6447c_1001
+- ca-certificates           2020.1.1                      0
+- cachetools                4.0.0                    pypi_0    pypi
 -cairo                     1.14.12              h8948797_3
 -certifi                   2019.11.28               py36_0
 -cffi                      1.14.0           py36h2e261b9_0
