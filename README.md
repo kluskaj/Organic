@@ -33,9 +33,10 @@ these differ by having
 
 
 In the the results in the paper where produced in a conda environment with the following packages:
+<pre>
 - Package                   version used             
 
-- _libgcc_mutex          ***  0.1            ;&           main
+- _libgcc_mutex             0.1                        main
 - _tflow_select             2.1.0                       gpu
 - absl-py                   0.9.0                    py36_0
 - asn1crypto                1.3.0                    py36_0
@@ -172,6 +173,6 @@ In the the results in the paper where produced in a conda environment with the f
 - zlib                      1.2.11               h7b6447c_3
 - zstd                      1.3.7                h0b5b093_0
 
-
+<\pre>
 
 
