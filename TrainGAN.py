@@ -4,8 +4,6 @@ import FunctionLibrary as lib
 import tensorflow.keras.layers as layers
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout,Activation,LeakyReLU
-#from keras.models import Model,Sequential
-#from tensorflow.keras.layers.advanced_activations import LeakyReLU
 from tensorflow.keras.optimizers import Adam
 import glob
 import os
@@ -18,8 +16,8 @@ import os
 ################ parameters governing the training of the gan ##################
 ################################################################################
 #imageParameters
-image_Size = 64 #controls the number of pixels in the images used for training the GAN
-NoiseLength = 100 # the number of elements in the noise vector used by the generator network
+image_Size = 128 #controls the number of pixels in the images used for training the GAN
+NoiseLength = 150 # the number of elements in the noise vector used by the generator network
 
 #Training parameters
 NumberOfEpochs = 200 # the number of iterations of taining over the intire training dataset
@@ -48,27 +46,28 @@ save_dir = os.path.join(os.getcwd(), 'saved_models') #directory where the traine
 def create_generator():
     generator=Sequential()
 
-    generator.add(layers.Dense(int((image_Size/4)*(image_Size/4)*64), use_bias=False, input_shape=(NoiseLength,)))
+    generator.add(layers.Dense(int((image_Size/4)*(image_Size/4)*128), use_bias=False, input_shape=(NoiseLength,)))
     generator.add(Activation('relu'))
 
     # when adding an extra layer with stride the layers above, the image size has to be devided by two an extra time and those below  once less
-    generator.add(layers.Reshape((int(image_Size/4),int(image_Size /4), 64)))
-    assert generator.output_shape == (None, int(image_Size/4), int(image_Size/4), 64) # Note: None is the batch size
+    generator.add(layers.Reshape((int(image_Size/4),int(image_Size /4), 128)))
+    assert generator.output_shape == (None, int(image_Size/4), int(image_Size/4), 128) # Note: None is the batch size
 
-    generator.add(layers.Conv2DTranspose(64, (5,5), strides=(1, 1), padding='same', use_bias=False,kernel_initializer='glorot_normal'))
+
+    generator.add(layers.Conv2DTranspose(64, (4,4), strides=(1, 1), padding='same', use_bias=False,kernel_initializer='glorot_normal'))
     assert generator.output_shape == (None, int(image_Size/4), int(image_Size/4), 64)
     generator.add(layers.BatchNormalization())
     generator.add(Activation('relu'))
 
 
-    generator.add(layers.Conv2DTranspose(32, (5,5), strides=(2, 2), padding='same', use_bias=False,
+    generator.add(layers.Conv2DTranspose(32, (4,4), strides=(2, 2), padding='same', use_bias=False,
                             kernel_initializer='glorot_normal'))
     assert generator.output_shape == (None, int(image_Size/2), int(image_Size/2), 32)
     generator.add(layers.BatchNormalization())
     generator.add(Activation('relu'))
 
 
-    generator.add(layers.Conv2DTranspose(1, (5,5), strides=(2, 2), padding='same', use_bias=False, activation='linear',kernel_initializer='glorot_normal'))
+    generator.add(layers.Conv2DTranspose(1, (4,4), strides=(2, 2), padding='same', use_bias=False, activation='linear',kernel_initializer='glorot_normal'))
     assert generator.output_shape == (None, image_Size, image_Size, 1)
     generator.add(layers.BatchNormalization())
     generator.add(Activation('tanh'))
@@ -79,13 +78,17 @@ def create_generator():
 
 def create_discriminator():
     disc = Sequential()
-    disc.add(layers.Conv2D(32, (3,3), strides=(2, 2), padding='same',input_shape=[image_Size, image_Size, 1]))
+    disc.add(layers.Conv2D(32, (4,4), strides=(2, 2), padding='same',input_shape=[image_Size, image_Size, 1]))
     disc.add(layers.LeakyReLU(0.2))
     disc.add(layers.Dropout(0.3))
     assert disc.output_shape == (None, int(image_Size/2), int(image_Size/2), 32)
 
 
-    disc.add(layers.Conv2D(64, (3, 3), strides=(2, 2), padding='same'))
+    disc.add(layers.Conv2D(64, (4, 4), strides=(2, 2), padding='same'))
+    disc.add(layers.LeakyReLU(0.2))
+    disc.add(layers.Dropout(0.3))
+
+    disc.add(layers.Conv2D(128, (4, 4), strides=(1, 1), padding='same'))
     disc.add(layers.LeakyReLU(0.2))
     disc.add(layers.Dropout(0.3))
 
@@ -94,7 +97,7 @@ def create_discriminator():
 
     disc.compile(loss='binary_crossentropy', optimizer=optimizer,metrics=["accuracy"])
     return disc
-optimizer = Adam(lr=0.0001, beta_1=0.5)
+optimizer = Adam(lr=0.0002, beta_1=0.5)
 
 ################################################################################
 ###################### preform  training #######################################
