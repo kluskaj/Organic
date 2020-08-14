@@ -673,7 +673,8 @@ parameters:
     theOneNoiseVector: the noise vector used
     Generator: the generator in the state producing the image used in the update
 returns:
-    updated mean and varience to take into account the given mean and varience images which are the I'th
+    updated mean and varience to take into account the given mean and varience images which are the I'th update
+    the images used here are normailzed between 0 and 1
 
 """
 def updateMeanAndVariance(I,mean,variance,theOneNoiseVector, Generator):

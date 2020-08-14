@@ -92,3 +92,8 @@ dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
     pixelSize,
     forTraining = False
 )
+#alter the output range  convert the mean to a tensorflow objectand, give the correct shape
+img = (mean*2)-1 
+img = tf.constant(img)
+img = tf.reshape(img,[1,image_Size,image_Size,1])
+print(dataLikelihood(None,img).numpy())
