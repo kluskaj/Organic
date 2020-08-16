@@ -13,15 +13,15 @@ discriminator = load_model(discPath)
 
 genPath = os.path.expandvars('${VSC_DATA}/CNN/unifCosi_basicGAN_multi4/saved_model_test/generatorGAN_CNN_test.h5')
 Generator= load_model(genPath)
-hyperParam = 2
-Begin_avraging =9000
-image_Size = 256
-NoiseLength = 150
-RandomWalkStepSize = 0.5
-alterationInterval = 500
-plotinterval = 3000
-epochs = 30000
-optimizer=Adam(learning_rate=0.0001,amsgrad=False)
+hyperParam = 2 #hyperparamter tuning the strength of the regularization
+Begin_avraging =9000 #epoch at which the noisevector used as input to the generator is first changed, the first contribution to the average is made at epoch = Begin_avraging -1
+image_Size = 256 #the number of pixels along one axis of the images 
+NoiseLength = 150 # the length of the inputvector of the generator.
+RandomWalkStepSize = 0.5 #size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*) 
+alterationInterval = 500 #number of epochs between a an additional contribution to the mean and variance image  
+plotinterval = 3000 #images are created after plotinterval-1 and plotinterval-1 epochs this allows for the contribution to the mean image to be seen and the effect of the 
+epochs = 30000 #the total epochs over which the generator is retrained
+optimizer=Adam(learning_rate=0.0001,amsgrad=False) #the optimizer to use
 #in order to load artificial datasets in a numpy format
 dirV2 =os.path.expandvars('${VSC_DATA}/CNN/TrainingDoubleLossGen/V2ModelImage6_gausianNoise_IRAS08544baselines.npy')
 simV2 = np.load(dirV2)
@@ -39,9 +39,8 @@ filename = 'IRAS08544-4431_PIONIER_alloidata.fits'
 
 #options are:
     #no sparco
-    #fixed sparco parameters
     #TODO: sparco fitting(requires a second neural net to be passed to the reconstruction)
-    #TODO: fourier space GAN/LOSS/reconstruction
+
 
 #sparco Parameters
 x = -0.44   #the right-ascention of a point source star, to be removed using sparco
@@ -51,7 +50,7 @@ PointFlux = 3.9 # The flux contribution of a point source star
 denv = 0.42 # the spectral index of the environment
 dsec = -2, #  the spectral index of the point source star (the uniform disk source has a default index of 4)
 UDdiameter = 0.5 # the diameter of the resolved source
-pixelSize = 0.2734375 #pixel size in mas (currently same as thesis, yields an fov for an imagesize of 256)
+pixelSize = 0.2734375*2 #pixel size in mas (currently same as thesis, yields an fov for an imagesize of 256)
 
 dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
 x,
