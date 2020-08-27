@@ -3,7 +3,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 mpl.use('Agg')# %matplotlib inline
 import tensorflow.keras.layers as layers
-from tensorflow.keras.models import Model,Sequential
+from tensorflow.keras.models import Model,Sequential,clone_model
 from tensorflow.keras.layers import Dense, Dropout, Input,Activation,LeakyReLU,Lambda
 #from keras.models import Model,Sequential
 #from tensorflow.keras.layers.advanced_activations import LeakyReLU
@@ -130,14 +130,14 @@ returns:
     images: a numpy array containing the image information and dimensions (number of images *imagesize*imagesize*1 )
 
 """
-def load_data2(dir,imagesize):
+def load_data(dir,imagesize):
     directories = glob.glob(dir)
     image = fits.getdata(directories[0], ext=0)
     normmax = np.amax(image)
     #normalize to [0,255]
     image *=255/(normmax)
     img = Image.fromarray(image)
-    img = img.resize((imagesize,imagesize),Image.BILINEAR )
+    img = img.resize((imagesize,imagesize),Image.LANCZOS )
     images= np.array([np.array(img)[:, :, np.newaxis]])
     for i in range(1,len(directories)):
         image = fits.getdata(directories[i], ext=0)
@@ -145,36 +145,13 @@ def load_data2(dir,imagesize):
         #normalize to [0,255]
         image*=255/(normmax)
         img = Image.fromarray(image)
-        img = img.resize((imagesize,imagesize),Image.BILINEAR )
+        img = img.resize((imagesize,imagesize),Image.LANCZOS )
         image=np.array([np.array(img)[:, :, np.newaxis]])
         images = np.concatenate([images, image]) #add the rescaled image to the array normalize to [-1,+1]
     images = (images-127.5)/127.5
     return images
 
-def load_data(dir,imagesize,dataMultiplier):
-    directories = glob.glob(dir)[:100]
-    image = fits.getdata(directories[0], ext=0)
-    normmax = np.amax(image)
-    #normalize to [0,255]
-    image *=255/(normmax)
-    img = Image.fromarray(image)
-    img = img.resize((imagesize,imagesize),Image.LANCZOS)
-    images= np.array([np.array(img)[:, :, np.newaxis]])
-    for i in range(1,len(directories)):
-        image = fits.getdata(directories[i], ext=0)
-        normmax = np.amax(image)
-        #normalize to [0,255]
-        image*=255/(normmax)
-        img = Image.fromarray(image)
-        img = img.resize((imagesize,imagesize),Image.LANCZOS)
-        image=np.array([np.array(img)[:, :, np.newaxis]])
-        images = np.concatenate([images, image])
-    xtrain= datagen.flow(images,shuffle=False,batch_size=len(directories) )[0]
-    for j in range(1,dataMultiplier):
-        addedXtrain = datagen.flow(images,shuffle=False,batch_size=len(directories) )[0]
-        xtrain = np.concatenate([xtrain, addedXtrain])
-    #normalize to [-1,+1]
-    return (xtrain-127.5)/127.5
+
 """
 plot_generated_images
 
@@ -273,7 +250,7 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
     #global discriminator
     discriminator = discr#modelCompiler(discr,optim,metr=["accuracy"])
     #discriminator.compile(loss='binary_crossentropy', optimizer=optim,metrics=["accuracy"])
-    X_train = load_data2(dir,image_size)
+    X_train = load_data(dir,image_size)
     batch_count = int(np.ceil(X_train.shape[0] / batch_size))
     # Creating GAN
     gan = create_gan(discriminator, generator,NoiseLength,optim)
@@ -389,7 +366,7 @@ denv,
 dsec,
 UDdiameter,
 pixelSize,
-forTraining = True
+forTraining = True,
 V2Artificial = None,CPArtificial = None):
     dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
     V2observed, V2err = dataObj['v2']
@@ -440,7 +417,7 @@ V2Artificial = None,CPArtificial = None):
         interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
         coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
-        #print((uabove-ufunc)*(vabove-vfunc)+(ufunc-ubelow)*(vfunc-vbelow)+(ufunc-ubelow)*(vabove-vfunc) +(uabove-ufunc)*(vfunc-vbelow))
+
         return interpValues
 
 
@@ -482,7 +459,7 @@ V2Artificial = None,CPArtificial = None):
         CPloss = K.sum(CPchi2Terms,axis=1)
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
-        if forTraining = True:
+        if forTraining == True:
             return  tf.cast(lossValue,tf.float32)
         else: return lossValue, V2loss , CPloss
 
@@ -561,17 +538,18 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         #V2Chi2Terms = V2Chi2Terms
         V2loss = K.sum(V2Chi2Terms,axis=1) #the squared visibility contribution to the loss
 
-        complexV1  = bilinearInterp(ftImages,(v1/spacialFreqPerPixel)+int(ImageSize/2),(u1/spacialFreqPerPixel)+int(ImageSize/2))
-        CPgenerated  = tf.math.angle(complexV1)
+        complV1  = bilinearInterp(ftImages,(v1/spacialFreqPerPixel)+int(ImageSize/2),(u1/spacialFreqPerPixel)+int(ImageSize/2))
+        CPgenerated  = tf.math.angle(complV1)
         complV2  = bilinearInterp(ftImages,(v2/spacialFreqPerPixel)+int(ImageSize/2),(u2/spacialFreqPerPixel)+int(ImageSize/2))
-        CPgenerated += tf.math.angle(complexV2)
+        CPgenerated += tf.math.angle(complV2)
         complV3  = bilinearInterp(ftImages,(v2/spacialFreqPerPixel)+int(ImageSize/2),(u2/spacialFreqPerPixel)+int(ImageSize/2))
-        CPgenerated -= tf.math.angle(compTotalCompVis(ftImages,u3,v3,wavelCP))
-        CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
+        CPgenerated -= tf.math.angle(complV3)
+        DiffComplexPhasors = tf.math.abs(tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPobserved),CPobserved))- tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPgenerated),CPgenerated)))
+        CPchi2Terms=K.pow(DiffComplexPhasors,2)/(K.pow(CPerr,2)*nCP)
         CPloss = K.sum(CPchi2Terms,axis=1)
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
-        if forTraining = True:
+        if forTraining == True:
             return  tf.cast(lossValue,tf.float32)
         else: return lossValue, V2loss , CPloss
 
@@ -588,8 +566,8 @@ returns:
 
 """
 def adjustedCrossEntropy(y_true,y_pred):
-    mask = K.cast(K.less(0.95,K.mean(y_pred)), K.floatx())
-    return K.binary_crossentropy(y_true, y_pred, from_logits=False) + mask*(80*(K.mean(y_pred)-0.95))**2
+    #mask = K.cast(K.less(0.95,K.mean(y_pred)), K.floatx())
+    return K.binary_crossentropy(y_true, y_pred, from_logits=False) #+ mask*(80*(K.mean(y_pred)-0.95))**2
 
 
 """
@@ -603,8 +581,8 @@ returns:
     these outputs are optimized using the dataLikelihood cost of choice and the adjusted binary_crossentropy as cost function.
 
 """
-def createNetwork(discriminator, generator,dataLikelihood,hyperParam):
-    noise_input = Input(shape = (150,))
+def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength):
+    noise_input = Input(shape = (NoiseLength,))
     x = generator(noise_input)
     gan_output= discriminator(x)
     gan= Model(inputs=noise_input, outputs=[gan_output,x])
@@ -626,24 +604,20 @@ effect:
     Creates and stores an the image generated at a stage during training
 
 """
-def plot_generated_images2(epoch, generator,theOneNoiseVector,image_Size):
+def plot_generated_images2(epoch, generator,theOneNoiseVector,image_Size,pixelSize,save_dir):
     noise= np.array([theOneNoiseVector for i in range(100)])
     generated_images = generator.predict(noise)
-    #print(discriminator.predict(generated_images))
-    #print(discriminator.evaluate(generated_images,np.ones(batch_size)))
     generated_images = generated_images.reshape(100,image_Size,image_Size)
 
     plt.figure()
-    mapable = plt.imshow((generated_images[0]+1)/2,origin = 'lower',extent = [-35,35,-35,35],cmap='hot',vmin= np.min((generated_images[0]+1)/2),vmax =np.max((generated_images[0]+1)/2))
+    mapable = plt.imshow((generated_images[0]+1)/2,origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= np.min((generated_images[0]+1)/2),vmax =np.max((generated_images[0]+1)/2))
     np.save('cgan_generated_image %d.png' %epoch,(generated_images[0]+1)/2)
     ax = plt.gca()
     ax.invert_xaxis()
-    print(np.max((generated_images[0]+1)/2))
-    print(np.min((generated_images[0]+1)/2))
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
     plt.colorbar(mapable)
-    plt.savefig('cgan_generated_image %d.png' %epoch)
+    plt.savefig(os.path.join(save_dir,'cgan_generated_image %d.png' %epoch))
     plt.close()
 
 """
@@ -670,21 +644,17 @@ parameters:
     I: the Number of contributions to the mean and variance that this update would make
     mean: the mean image before this update
     variance: the variance before for this update
-    theOneNoiseVector: the noise vector used
-    Generator: the generator in the state producing the image used in the update
+    Image: the image used in the update in numpy format
 returns:
     updated mean and varience to take into account the given mean and varience images which are the I'th update
     the images used here are normailzed between 0 and 1
 
 """
-def updateMeanAndVariance(I,mean,variance,theOneNoiseVector, Generator):
-    generatedImage = Generator.predict(np.array([theOneNoiseVector for i in range(2)]))[0]
-    generatedImage = np.squeeze((generatedImage+1)/2)
-    generatedImage = generatedImage/np.sum(generatedImage)
-    print(generatedImage.shape)
-    newmean = mean + (generatedImage - mean)/I
+def updateMeanAndVariance(I,mean,variance,image):
+    image = image/np.sum(image)
+    newmean = mean + (image - mean)/I
     if I > 1:
-        newvariance = ((I-1)*variance + (I-1)*(mean -newmean)**2 + (generatedImage - newmean)**2)/(I-1)
+        newvariance = ((I-1)*variance + (I-1)*(mean -newmean)**2 + (image - newmean)**2)/(I-1)
         variance = newvariance
     mean = newmean
     return mean, variance
@@ -701,7 +671,7 @@ returns:
     Makes various plots of both the components of the objective function and the total objective function itself
 
 """
-def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
+def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[],save_dir = ''):
     # plots of both terms of the objective function and the total objective function itself as  a function of epoch
     fig1 = plt.figure()
     plt.plot(epoch,diskyLoss,label = r'$\mu f_{prior}$',c = 'b',alpha=0.5)
@@ -710,7 +680,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.legend()
     plt.ylabel('loss')
     plt.xlabel('epoch')
-    plt.savefig('Loss_evolution.png')
+    plt.savefig(os.path.join(save_dir, 'Loss_evolution.png'))
     fig2 = plt.figure()
     color=iter(cm.rainbow(np.linspace(0,1,3)))
     c=next(color)
@@ -727,7 +697,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.legend()
     plt.ylabel(r'$log_{10}$(loss)')
     plt.xlabel('epoch')
-    plt.savefig('Log10_Loss_evolution.png')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_evolution.png'))
 
 
     #plots the regularization cost term as a function of epoch on a log scale
@@ -738,7 +708,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.legend()
     plt.ylabel(r'$\mu f_{prior}$')
     plt.xlabel('epoch')
-    plt.savefig('Log10_Loss_discriminatorEvolution.png')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_discriminatorEvolution.png'))
 
     #plots the data likelihood term as a function of epoch on a log scale
     fig4 = plt.figure()
@@ -748,7 +718,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.legend()
     plt.ylabel(r'$f_{data}$')
     plt.xlabel('epoch')
-    plt.savefig('Log10_Loss_fitevolution.png')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_fitevolution.png'))
 
 
     #plots the total objective function as a function of epoch
@@ -759,7 +729,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.legend()
     plt.ylabel(r'$f_{data}+\mu f_{prior}$')
     plt.xlabel('epoch')
-    plt.savefig('Log10_Loss_TotalEvolution.png')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
 
     #plots the dataLikelihood troughout training agains the regularization term
     fig4 = plt.figure()
@@ -769,9 +739,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.legend()
     plt.ylabel(r'$\mu f_{prior}$')
     plt.xlabel(r'$f_{data}$')
-    plt.xlim(0,1000)
-    plt.ylim(0,1000)
-    plt.savefig('discrLossVSFitLoss1000range.png')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
 
 
     #plots the dataLikelihood troughout training agains the regularization term, zoomed in on the origin
@@ -784,7 +752,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.xlabel(r'$f_{data}$')
     plt.ylim(0,10)
     plt.xlim(0,10)
-    plt.savefig('discrLossVSFitLoss100range.png' )
+    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100range.png') )
 
     ##plots the dataLikelihood troughout training agains the regularization term divided by the hyperParam, zoomed in on the origin
     fig4 = plt.figure()
@@ -796,7 +764,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.xlabel(r'$f_{data}$')
     plt.ylim(0,100)
     plt.xlim(0,100)
-    plt.savefig('discrLossVSFitLoss100rangeNoMu.png')
+    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100rangeNoMu.png') )
 
     #plots the dataLikelihood troughout training agains the regularization term, on a log scale
     fig4 = plt.figure()
@@ -805,7 +773,127 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[]):
     plt.scatter(np.log10(fitLoss),np.log10(diskyLoss),c = c,alpha=0.5)
     plt.ylabel(r'$log_{10}(\mu f_{prior })$')
     plt.xlabel(r'$log_{10}(f_{data})$')
-    plt.savefig('logdiscrLossVSFitLossNo.png')
+    plt.savefig(os.path.join(save_dir, 'logdiscrLossVSFitLossNo.png'))
+
+
+
+
+"""
+plotEvolution
+
+parameters:
+    epoch: array or list containing the epochs of training at which values are plotted
+    diskyLoss: array or list holding the cost computed for the discriminators output at the given epochs
+    fitLoss: array or list holding the cost computed using the data likelihood at the given epochs
+returns:
+    Makes various plots of both the components of the objective function and the total objective function itself
+
+"""
+def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[],save_dir=''):
+    # plots of both terms of the objective function and the total objective function itself as  a function of epoch
+    fig1 = plt.figure()
+    plt.plot(epoch,diskyLoss,label = r'$\mu f_{prior}$',c = 'b',alpha=0.5)
+    plt.plot(epoch,fitLoss,label = r'$f_{data}$',c = 'g',alpha=0.5)
+    plt.plot(epoch,fitLoss+diskyLoss,label = r'$f_{data}+\mu f_{prior}$',c = 'r',alpha=0.5)
+    plt.legend()
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.savefig(os.path.join(save_dir, 'Loss_evolution.png'))
+    fig2 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+
+    #plots of both terms of the objective function and the total objective function itself as  a function of epoch on log scale
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.plot(epoch,np.log10(diskyLoss),label = r'$\mu f_{prior}$',c = c,alpha=0.7)
+    c=next(color)
+    plt.plot(epoch,np.log10(fitLoss),label = r'$f_{data}$',c = c,alpha=0.7)
+    c=next(color)
+    plt.plot(epoch,np.log10(fitLoss+diskyLoss),label = r'$f_{data}+\mu f_{prior}$',c = c,alpha=0.7)
+    plt.legend()
+    plt.ylabel(r'$log_{10}$(loss)')
+    plt.xlabel('epoch')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_evolution.png'))
+
+
+    #plots the regularization cost term as a function of epoch on a log scale
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.plot(epoch,np.log10(diskyLoss),c = c,alpha=0.7)
+    plt.legend()
+    plt.ylabel(r'$\mu f_{prior}$')
+    plt.xlabel('epoch')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_discriminatorEvolution.png'))
+
+    #plots the data likelihood term as a function of epoch on a log scale
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.plot(epoch,np.log10(fitLoss),c = c,alpha=0.7)
+    plt.legend()
+    plt.ylabel(r'$f_{data}$')
+    plt.xlabel('epoch')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_fitevolution.png'))
+
+
+    #plots the total objective function as a function of epoch
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.plot(epoch,np.log10(fitLoss+diskyLoss),c = c,alpha=0.7)
+    plt.legend()
+    plt.ylabel(r'$f_{data}+\mu f_{prior}$')
+    plt.xlabel('epoch')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
+
+    #plots the dataLikelihood troughout training agains the regularization term
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
+    plt.legend()
+    plt.ylabel(r'$\mu f_{prior}$')
+    plt.xlabel(r'$f_{data}$')
+    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
+
+
+    #plots the dataLikelihood troughout training agains the regularization term, zoomed in on the origin
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
+    plt.legend()
+    plt.ylabel(r'$\mu f_{prior}$')
+    plt.xlabel(r'$f_{data}$')
+    plt.ylim(0,10)
+    plt.xlim(0,10)
+    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100range.png') )
+
+    ##plots the dataLikelihood troughout training agains the regularization term divided by the hyperParam, zoomed in on the origin
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.scatter(fitLoss,diskyLoss/hyperParam,c = c,alpha=0.5)
+    plt.legend()
+    plt.ylabel(r'$ f_{prior}$')
+    plt.xlabel(r'$f_{data}$')
+    plt.ylim(0,100)
+    plt.xlim(0,100)
+    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100rangeNoMu.png') )
+
+    #plots the dataLikelihood troughout training agains the regularization term, on a log scale
+    fig4 = plt.figure()
+    color=iter(cm.rainbow(np.linspace(0,1,3)))
+    c=next(color)
+    plt.scatter(np.log10(fitLoss),np.log10(diskyLoss),c = c,alpha=0.5)
+    plt.ylabel(r'$log_{10}(\mu f_{prior })$')
+    plt.xlabel(r'$log_{10}(f_{data})$')
+    plt.savefig(os.path.join(save_dir, 'logdiscrLossVSFitLossNo.png'))
+
+
 
 """
 plotMeanAndSTD
@@ -821,77 +909,77 @@ effect:
 
 
 """
-def plotMeanAndSTD(mean,variance):
+def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir):
     # plots the mean image,
     plt.figure()
-    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-35,35,-35,35],cmap='hot',vmin= 0.,vmax =1.)
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
     plt.colorbar(mapable)
-    plt.savefig('meanImage.png' )
+    plt.savefig(os.path.join(saveDir, 'meanImage.png') )
     plt.close()
 
     #plots the variance image
     plt.figure()
-    mapable = plt.imshow(np.sqrt(variance),origin = 'lower',extent = [-35,35,-35,35],cmap='hot')
+    mapable = plt.imshow(np.sqrt(variance),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot')
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
-    plt.savefig('rmsImage.png' )
+    plt.savefig(os.path.join(saveDir,'rmsImage.png') )
     plt.close()
 
     #plot the mean image with a 5 sigma significance contour.
     plt.figure()
-    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-35,35,-35,35],cmap='hot',vmin= 0.,vmax =1.)
-    plt.contour(mean/np.sqrt(variance), [5.], colors='b', origin='lower', extent=[-35,35,-35,35])
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
+    plt.contour(mean/np.sqrt(variance), [5.], colors='b', origin='lower', extent=[-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2])
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
     plt.colorbar(mapable)
-    plt.savefig('Sign5image.png')
+    plt.savefig(os.path.join(saveDir,'Sign5image.png'))
     plt.close()
 
     #plot the mean image with a 3 sigma significance contour.
     plt.figure()
-    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-35,35,-35,35],cmap='hot',vmin= 0.,vmax =1.)
-    plt.contour(mean/np.sqrt(variance), [3.], colors='b', origin='lower', extent=[-35,35,-35,35])
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
+    plt.contour(mean/np.sqrt(variance), [3.], colors='b', origin='lower', extent=[-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2])
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
     plt.colorbar(mapable)
-    plt.savefig('Sign3image.png')
+    plt.savefig(os.path.join(saveDir,'Sign3image.png'))
     plt.close()
 
     #plots the corresponding mean over standard deviation map
     plt.figure()
-    mapable = plt.imshow(mean/np.sqrt(variance),origin = 'lower',extent = [-35,35,-35,35],cmap='hot')
+    mapable = plt.imshow(mean/np.sqrt(variance),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot')
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
     plt.colorbar(mapable)
-    plt.savefig('meanOverSignImage.png')
+    plt.savefig(os.path.join(saveDir,'meanOverSignImage.png'))
     plt.close()
 
 """
 reconsruction
 
 parameters:
-    generator:
-    discriminator:
-    dataLikelihood:
-    epochs:
-    image_Size:
-    hyperParam:
-    NoiseLength:
-    beginepoch: the epoch at which the first contribution to the mean image is made
-    RandomWalkStepSize:
-    alterationInterval:
+        generator: the pre trained generator to use
+        discriminator: the pre trained discriminator to use
+        dataLikelihood: the data likelihood to use
+        epochs: the nulber of epochs for which to retrain the generator
+        image_Size: the number of pixels in the images allong one axis
+        hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
+        NoiseLength: the length of the noisevector used as input for the generator
+        beginepoch: the epoch at which the first contribution to the mean image is made
+        RandomWalkStepSize: size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*)
+        alterationInterval: number of epochs between a an additional contribution to the mean and variance image
     plotinterval: the epoch interval between changes to the Noisevector and contributions to the
     saveDir: directory to store the generator in its final state
 Returns:
@@ -900,14 +988,13 @@ Returns:
 
 
 """
-def reconsruction(Generator, discriminator,opt,dataLikelihood , epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000,saveDir  = ''):
+def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000,saveDir  = ''):
     #create the network with two cost terms
     discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
     discriminator.trainable =False
     Generator.trainable = True
-    Generator.add(Lambda(lambda x: 2*((x-K.min(x))/(K.max(x) -K.min(x)))-1 ))
-
-    fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam)
+    #Generator.add(Lambda(lambda x: 2*((x-K.min(x))/(K.max(x) -K.min(x)))-1 ))
+    fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength)
     # initialize empty arrays to store the cost evolution
     diskyLoss = np.zeros(epochs)
     fitLoss = np.zeros(epochs)
@@ -919,7 +1006,7 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , epochs = 21000,i
     # start tracking the amount of contributions made to the mean and variance image
     i = 1
     # initialize a initial random noise vector
-    theOneNoiseVector = np.random.normal(0,1,150)
+    theOneNoiseVector = np.random.normal(0,1,NoiseLength)
     y_gen =[np.ones(1),np.ones(1)]
     for e in range(1, epochs+1 ):
         #generate  random noise as an input  to  initialize the  generator
@@ -929,20 +1016,98 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , epochs = 21000,i
         fitLoss[e-1] += (hist[2])
         # alter the noise vector each alterationInterval, if the first contribution to the mean and var has been made
         if e >= beginepoch and e%alterationInterval ==0:
-            theOneNoiseVector = (theOneNoiseVector  + np.random.normal(0,RandomWalkStepSize,150))/(1.+RandomWalkStepSize)
+            theOneNoiseVector = (theOneNoiseVector  + np.random.normal(0,RandomWalkStepSize,NoiseLength))/(1.+RandomWalkStepSize)
         #update the mean and variance 1 iteration before the noisevector is altered
-        if (e+1) >= beginepoch and (e+1)%alterationInterval ==0:
-            mean, variance = updateMeanAndVariance(i,mean,variance,theOneNoiseVector,Generator)
+        if (e+1) >= beginepoch and (e+1-beginepoch)%alterationInterval ==0:
+            image = Generator.predict(np.array([theOneNoiseVector for i in range(2)]))[0]
+            image = np.squeeze((image+1)/2)
+            mean, variance = updateMeanAndVariance(i,mean,variance,image)
             i += 1
         #plot the image after the noisevector is altered, this is the new start position for re-convergence
         if e % plotinterval== 0 or e ==1:
-            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size)
+            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size,pixelSize,saveDir)
         #plot the image contributing to the mean and variance
         if (e+1) % plotinterval== 0:
-            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size)
+            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size,pixelSize,saveDir)
+        plt.close()
     #plot the loss evolution
-    plotEvolution(epoch,hyperParam,diskyLoss,fitLoss)
+    plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
     #plot and store the mean and variance image
-    plotMeanAndSTD(mean,variance)
+    plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir)
 
-    return mean, Image, diskyLoss, fitLoss
+    return mean, variance, diskyLoss, fitLoss
+
+
+
+"""
+reconsruction
+
+parameters:
+    nrRestarts: the number of times the generator is reset to its initial state
+    generator: the pre trained generator to use
+    discriminator: the pre trained discriminator to use
+    dataLikelihood: the data likelihood to use
+    epochs: the nulber of epochs for which to retrain the generator
+    image_Size: the number of pixels in the images allong one axis
+    hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
+    NoiseLength: the length of the noisevector used as input for the generator
+    beginepoch: the epoch at which the first contribution to the mean image is made
+    RandomWalkStepSize: size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*)
+    alterationInterval: number of epochs between a an additional contribution to the mean and variance image
+    plotinterval: the epoch interval between changes to the Noisevector and contributions to the
+    saveDir: directory to store the generator in its final state
+Returns:
+    the reconstructed image (mean over noisevectors)
+
+
+
+"""
+def restartingImageReconstruction(nrRestarts,Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000):
+    mean = np.zeros([image_Size,image_Size])
+    variance = np.zeros([image_Size,image_Size])
+    for r in range(nrRestarts):
+        GeneratorCopy = tf.keras.models.clone_model(Generator)
+        GeneratorCopy.set_weights(Generator.get_weights())
+        Iter_dir = os.path.join(os.getcwd(), str(r))
+        if not os.path.isdir(Iter_dir):
+            os.makedirs(Iter_dir)
+        m, v, diskyLoss, fitLoss = reconsruction(GeneratorCopy,
+                                        discriminator,
+                                        opt,
+                                        dataLikelihood,
+                                        pixelSize,
+                                        epochs,
+                                        image_Size,
+                                        hyperParam,
+                                        NoiseLength,
+                                        beginepoch,
+                                        RandomWalkStepSize,
+                                        alterationInterval,
+                                        plotinterval,
+                                        saveDir  = Iter_dir)
+        mean, variance = updateMeanAndVariance(r+1,mean,variance,m)
+        del GeneratorCopy
+    final_dir = os.path.join(os.getcwd(), 'finalImage')
+    if not os.path.isdir(final_dir):
+        os.makedirs(final_dir)
+    plotMeanAndSTD(mean,variance,image_Size,pixelSize,final_dir)
+
+    return mean, variance
+
+def toFits(Image,imageSize,pixelSize,Name,comment= ''):
+    header = fits.Header()
+    header['SIMPLE'] = 'T'
+    header['BITPIX']  = -64
+    header['NAXIS'] = 2
+    header['NAXIS1'] = imageSize
+    header['NAXIS2']  =  imageSize
+    header['EXTEND']  = 'T'
+    header['CTYPE1']  = 'X [arcsec]'
+    header['CTYPE2']  = 'Y [arcsec]'
+    header['COMMENT'] = comment
+    header['CDELT1'] = pixelSize/1000
+    header['CDELT2'] = pixelSize/1000
+    header['CRVAL1'] = -imageSize*pixelSize/2000
+    header['CRVAL2'] = -imageSize*pixelSize/2000
+    prihdu = fits.PrimaryHDU(Image,header=header)
+    prihdu.writeto(Name+'.fits')

@@ -13,6 +13,7 @@
 
 export PATH=${VSC_DATA}/miniconda3/bin:${PATH}
 conda activate thesisCNN
-cd ${VSC_DATA}/summerjobTests/test1/
+mkdir ${VSC_DATA}/summerjobTests/SpatialDropout2D/
+cd ${VSC_DATA}/summerjobTests/SpatialDropout2D/
 cp ${VSC_DATA}/summerjobTests/TrainGAN.py .
 python ${VSC_DATA}/summerjobTests/TrainGAN.py

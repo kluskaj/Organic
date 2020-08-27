@@ -9,30 +9,30 @@ import tensorflow as tf
 ################################################################################
 ################ parameters for the reconstruction #############################
 ################################################################################
-discPath = os.path.expandvars('${VSC_DATA}/summerjobTests/test1/saved_models/discriminatorfinalModel.h5')
+discPath = os.path.expandvars('${VSC_DATA}/summerjobTests/GANlowerDropout_BatchnormBeforetanh/saved_models/discriminatorfinalModel.h5')
 discriminator = load_model(discPath)
 
 
-genPath = os.path.expandvars('${VSC_DATA}/summerjobTests/test1/saved_models/generatorfinalModel.h5')
+genPath = os.path.expandvars('${VSC_DATA}/summerjobTests/GANlowerDropout_BatchnormBeforetanh/saved_models/generatorfinalModel.h5')
 Generator= load_model(genPath)
-hyperParam = 0.00000002
-Begin_avraging =200
+hyperParam = 0.1
+Begin_avraging = 301
 image_Size = 128
-NoiseLength = 150
+NoiseLength = 100
 RandomWalkStepSize = 0.5
 alterationInterval = 100
 plotinterval = 100 #set to a multiple of the alteration interval to see the effect of noise vector change
-epochs = 10200
+epochs = 301
 optimizer=Adam(learning_rate=0.0001,beta_1=0.91,beta_2=0.999,amsgrad=False)
 
 #load artificial datasets in a numpy format
-dirV2 =os.path.expandvars('${VSC_DATA}/CNN/TrainingDoubleLossGen/V2ModelImage6_gausianNoise_IRAS08544baselines.npy')
+dirV2 =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDatasets/V2ModelImage6_gausianNoise_HD45677baselines.npy')
 simV2 = np.load(dirV2)
-dirCP =os.path.expandvars('${VSC_DATA}/CNN/TrainingDoubleLossGen/CPModelImage6_gausianNoise_IRAS085442baselines.npy')
+dirCP =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDatasets/CPModel_gausianNoise_HD45677baselines.npy')
 simCP = np.load(dirCP)
 #directoryand name of the OIfits file in case of real data
 DataDir = os.path.expandvars('${VSC_DATA}/CNN/OIfits/')
-filename = 'IRAS08544-4431_PIONIER_alloidata.fits'
+filename = 'HD45677all.fits'
 
 
 
@@ -44,7 +44,7 @@ filename = 'IRAS08544-4431_PIONIER_alloidata.fits'
     #no sparco
     #fixed sparco parameters
     #TODO: sparco fitting(requires a second neural net to be passed to the reconstruction)
-    #TODO: fourier space GAN/LOSS/reconstruction
+
 
 #sparco Parameters
 x = -0.44   #the right-ascention of a point source star, to be removed using sparco
@@ -54,32 +54,36 @@ PointFlux = 0#3.9 # The flux contribution of a point source star
 denv = 0.42 # the spectral index of the environment
 dsec = -2, #  the spectral index of the point source star (the uniform disk source has a default index of 4)
 UDdiameter = 0.5 # the diameter of the resolved source
-pixelSize = 0.2734375*2 #pixel size in mas (currently same as thesis, yields an fov for an imagesize of 256)
-
+pixelSize = 0.546875 #pixel size in mas
 dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
-x,
-y,
-UDflux,
-PointFlux,
-denv,
-dsec,
-UDdiameter,
-pixelSize,
-V2Artificial = simV2,CPArtificial = simCP)
+                                                x,
+                                                y,
+                                                UDflux,
+                                                PointFlux,
+                                                denv,
+                                                dsec,
+                                                UDdiameter,
+                                                pixelSize,
+                                                V2Artificial = simV2,CPArtificial = simCP)
+
+
+#dataLikelihood for stellar surfaces
+#dataLikelihood = lib.dataLikeloss_NoSparco(DataDir,filename,image_Size,pixelSize)
+
 
 ################################################################################
 ################## run  the image reconstrution ################################
 ################################################################################
 
-mean, varianceImage, diskyLoss, fitLoss = lib.reconsruction(Generator, discriminator,optimizer,dataLikelihood ,pixelSize, epochs ,image_Size ,hyperParam,NoiseLength,Begin_avraging ,RandomWalkStepSize,alterationInterval,plotinterval,saveDir  = '')
-
+#mean, varianceImage, diskyLoss, fitLoss = lib.reconsruction(Generator, discriminator,optimizer,dataLikelihood ,pixelSize, epochs ,image_Size ,hyperParam,NoiseLength,Begin_avraging ,RandomWalkStepSize,alterationInterval,plotinterval,saveDir  = '')
+mean, varianceImage = lib.restartingImageReconstruction(100,Generator, discriminator,optimizer,dataLikelihood ,pixelSize, epochs ,image_Size ,hyperParam,NoiseLength,Begin_avraging ,RandomWalkStepSize,alterationInterval,plotinterval)
 
 # store the mean and variance image
 np.save('meanImage',mean)
 np.save('varianceImage',varianceImage)
 #store the numpy arrays for further use
-np.save('diskyLoss',diskyLoss)
-np.save('fitLoss',fitLoss)
+#np.save('diskyLoss',diskyLoss)
+#np.save('fitLoss',fitLoss)
 
 
 #print the data likelihood terms for the reconstructed images
@@ -100,6 +104,19 @@ img = (mean*2)-1
 img = tf.constant(img)
 img = tf.reshape(img,[1,image_Size,image_Size,1])
 lossValue, V2loss , CPloss = dataLikelihood(None,img)
+print('the total reduced chi squared')
 print(lossValue.numpy())
+print('the squared visibilities reduced chi squared')
 print(V2loss.numpy())
+print('the closure phases reduced chi squared')
 print(CPloss.numpy())
+
+
+#Create a fits file for the final image
+lib.toFits(mean,image_Size,pixelSize,os.path.basename(os.getcwd()),comment= "")
+
+
+#print the regularization value of the mean image
+score = discriminator.predict(img.reshape(1,image_Size,image_Size,1))
+print('The f prior value is')
+print(-np.log(score))
