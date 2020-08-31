@@ -5,8 +5,8 @@
 #PBS -l partition=gpu
 #PBS -A lp_ganimgrec
 #PBS -N normalGanMoreEpochs
-#PBS -o Arificial_HD_mu0.1_epoch300_100iter.stdout
-#PBS -e Arificial_HD_mu0.1_epoch300_100iter.stderr
+#PBS -o IRAS_mu0.01_epoch300_100iter.stdout
+#PBS -e IRAS_mu0.01_epoch300_100iter.stderr
 #PBS -m abe
 #PBS -M rik.claes@student.kuleuven.be
 #PBS -l nodes=1:ppn=9:gpus=1:skylake
@@ -14,7 +14,7 @@
 
 export PATH=${VSC_DATA}/miniconda3/bin:${PATH}
 conda activate thesisCNN
-mkdir -p ${VSC_DATA}/summerjobTests/Arificial_HD_mu0.1_epoch300_100iter/
-cd ${VSC_DATA}/summerjobTests/Arificial_HD_mu0.1_epoch300_100iter/
+mkdir -p ${VSC_DATA}/summerjobTests/IRAS_mu0.01_epoch300_100iter/
+cd ${VSC_DATA}/summerjobTests/IRAS_mu0.01_epoch300_100iter/
 cp ${VSC_DATA}/summerjobTests/ImageReconstruction.py .
 python ${VSC_DATA}/summerjobTests/ImageReconstruction.py

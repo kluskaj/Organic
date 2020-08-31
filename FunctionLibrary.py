@@ -439,6 +439,7 @@ V2Artificial = None,CPArtificial = None):
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
         y_pred = (tf.squeeze(y_pred,axis = 3) +1)/2   #/K.sum(K.sum(y_pred,axis =2),axis =1)
+        #y_pred = y_pred/K.sum(K.sum(y_pred,axis =2),axis=1)
         y_pred = tf.cast((y_pred),tf.complex128)
         y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
         ftImages = tf.signal.fft2d(y_pred)#is complex!!
@@ -824,7 +825,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[],save_dir=''):
     c=next(color)
     plt.plot(epoch,np.log10(diskyLoss),c = c,alpha=0.7)
     plt.legend()
-    plt.ylabel(r'$\mu f_{prior}$')
+    plt.ylabel(r'$log_{10}(\mu f_{prior})$')
     plt.xlabel('epoch')
     plt.savefig(os.path.join(save_dir, 'Log10_Loss_discriminatorEvolution.png'))
 
@@ -834,7 +835,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[],save_dir=''):
     c=next(color)
     plt.plot(epoch,np.log10(fitLoss),c = c,alpha=0.7)
     plt.legend()
-    plt.ylabel(r'$f_{data}$')
+    plt.ylabel(r'$log_{10}(f_{data})$')
     plt.xlabel('epoch')
     plt.savefig(os.path.join(save_dir, 'Log10_Loss_fitevolution.png'))
 
@@ -845,7 +846,7 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[],save_dir=''):
     c=next(color)
     plt.plot(epoch,np.log10(fitLoss+diskyLoss),c = c,alpha=0.7)
     plt.legend()
-    plt.ylabel(r'$f_{data}+\mu f_{prior}$')
+    plt.ylabel(r'$log(f_{data}+\mu f_{prior})$')
     plt.xlabel('epoch')
     plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
 
