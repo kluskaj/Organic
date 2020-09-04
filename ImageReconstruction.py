@@ -9,11 +9,11 @@ import tensorflow as tf
 ################################################################################
 ################ parameters for the reconstruction #############################
 ################################################################################
-discPath = os.path.expandvars('${VSC_DATA}/summerjobTests/batchNormDiscrim/saved_models/discriminatorfinalModel.h5')
+discPath = os.path.expandvars('${VSC_DATA}/summerjobTests/theGAN/saved_models/discriminatorfinalModel.h5')
 discriminator = load_model(discPath)
 
 
-genPath = os.path.expandvars('${VSC_DATA}/summerjobTests/batchNormDiscrim/saved_models/generatorfinalModel.h5')
+genPath = os.path.expandvars('${VSC_DATA}/summerjobTests/theGAN/saved_models/generatorfinalModel.h5')
 Generator= load_model(genPath)
 hyperParam = 1
 Begin_avraging = 251
