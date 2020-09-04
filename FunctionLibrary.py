@@ -17,7 +17,8 @@ from astropy.io import fits
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from matplotlib.pyplot import cm
 import tensorflow as tf
-import datafuncRik
+#import datafuncRik
+import ReadOIFITS as oi
 import scipy.special as sp
 ################################################################################
 ############################### for GAN training ####################################
@@ -368,7 +369,8 @@ UDdiameter,
 pixelSize,
 forTraining = True,
 V2Artificial = None,CPArtificial = None):
-    dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
+    data = oi.read(DataDir,filename)
+    dataObj = data.givedataJK()
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)
     V2observed = tf.constant(V2observed)#conversion to tensor
@@ -485,7 +487,8 @@ returns:
 
 """
 def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = True,V2Artificial = None,CPArtificial = None):
-    dataObj = datafuncRik.ReadFilesPionier(DataDir,filename)
+    data = oi.read(DataDir,filename)
+    dataObj = data.givedataJK()
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)
     V2observed = tf.constant(V2observed)#conversion to tensor

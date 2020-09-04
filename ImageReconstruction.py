@@ -9,27 +9,28 @@ import tensorflow as tf
 ################################################################################
 ################ parameters for the reconstruction #############################
 ################################################################################
-discPath = os.path.expandvars('${VSC_DATA}/summerjobTests/GANlowerDropout_BatchnormBeforetanh/saved_models/discriminatorfinalModel.h5')
+discPath = os.path.expandvars('${VSC_DATA}/summerjobTests/batchNormDiscrim/saved_models/discriminatorfinalModel.h5')
 discriminator = load_model(discPath)
 
 
-genPath = os.path.expandvars('${VSC_DATA}/summerjobTests/GANlowerDropout_BatchnormBeforetanh/saved_models/generatorfinalModel.h5')
+genPath = os.path.expandvars('${VSC_DATA}/summerjobTests/batchNormDiscrim/saved_models/generatorfinalModel.h5')
 Generator= load_model(genPath)
-hyperParam = 0.1
-Begin_avraging = 301
+hyperParam = 1
+Begin_avraging = 251
 image_Size = 128
 NoiseLength = 100
 RandomWalkStepSize = 0.5
-alterationInterval = 300
+alterationInterval = 1
 plotinterval = 300 #set to a multiple of the alteration interval to see the effect of noise vector change
-epochs = 301
+epochs = 251
+numberOfRestarts =100
 optimizer=Adam(learning_rate=0.0001,beta_1=0.91,beta_2=0.999,amsgrad=False)
 
 #load artificial datasets in a numpy format
-dirV2 =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDatasets/V2ModelImage6_gausianNoise_IRAS08544baselines.npy')
-simV2 =None #np.load(dirV2)
-dirCP =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDatasets/CPModel_gausianNoise_IRAS085442baselines.npy')
-simCP =None #np.load(dirCP)
+dirV2 =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDatasets/V2Model_gausianNoise_IRAS_baselines.npy')
+simV2 =None#np.load(dirV2)
+dirCP =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDatasets/CPModel_gausianNoise_IRAS_baselines.npy')
+simCP =None#np.load(dirCP)
 #directoryand name of the OIfits file in case of real data
 DataDir = os.path.expandvars('${VSC_DATA}/CNN/OIfits/')
 filename = 'IRAS08544-4431_PIONIER_alloidata.fits'
@@ -54,7 +55,7 @@ PointFlux = 3.9 # The flux contribution of a point source star
 denv = 0.42 # the spectral index of the environment
 dsec = -2, #  the spectral index of the point source star (the uniform disk source has a default index of 4)
 UDdiameter = 0.5 # the diameter of the resolved source
-pixelSize = 0.6 #pixel size in mas
+pixelSize = 0.546875 #pixel size in mas
 dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
                                                 x,
                                                 y,
@@ -76,7 +77,7 @@ dataLikelihood = lib.dataLikeloss_FixedSparco(DataDir,filename,image_Size,
 ################################################################################
 
 #mean, varianceImage, diskyLoss, fitLoss = lib.reconsruction(Generator, discriminator,optimizer,dataLikelihood ,pixelSize, epochs ,image_Size ,hyperParam,NoiseLength,Begin_avraging ,RandomWalkStepSize,alterationInterval,plotinterval,saveDir  = '')
-mean, varianceImage = lib.restartingImageReconstruction(25,Generator, discriminator,optimizer,dataLikelihood ,pixelSize, epochs ,image_Size ,hyperParam,NoiseLength,Begin_avraging ,RandomWalkStepSize,alterationInterval,plotinterval)
+mean, varianceImage = lib.restartingImageReconstruction(numberOfRestarts,Generator, discriminator,optimizer,dataLikelihood ,pixelSize, epochs ,image_Size ,hyperParam,NoiseLength,Begin_avraging ,RandomWalkStepSize,alterationInterval,plotinterval)
 
 # store the mean and variance image
 np.save('meanImage',mean)
