@@ -443,7 +443,8 @@ V2Artificial = None,CPArtificial = None):
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
         y_pred = tf.squeeze(y_pred,axis = 3)
-        y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))   #/K.sum(K.sum(y_pred,axis =2),axis =1)
+        ypred = (y_pred+1)/2
+        #y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))   #/K.sum(K.sum(y_pred,axis =2),axis =1)
         #y_pred = y_pred/K.sum(K.sum(y_pred,axis =2),axis=1)
         y_pred = tf.cast((y_pred),tf.complex128)
         y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
@@ -531,7 +532,8 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
         y_pred = tf.squeeze(y_pred,axis = 3)
-        y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))    #/K.sum(K.sum(y_pred,axis =2),axis =1)
+        ypred = (y_pred+1)/2
+        #y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))    #/K.sum(K.sum(y_pred,axis =2),axis =1)
         y_pred = tf.cast((y_pred),tf.complex128)
         y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
         ftImages = tf.signal.fft2d(y_pred)#is complex!!
@@ -659,6 +661,7 @@ returns:
 
 """
 def updateMeanAndVariance(I,mean,variance,image):
+    image = image-np.min(image)
     image = image/np.sum(image)
     newmean = mean + (image - mean)/I
     if I > 1:
@@ -1002,7 +1005,7 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epoch
     discriminator.trainable =False
     for layer in discriminator.layers:
         if layer.__class__.__name__ == 'SpatialDropout2D':
-            layer.trainable = True      
+            layer.trainable = True
     Generator.trainable = True
     fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength)
     # initialize empty arrays to store the cost evolution
