@@ -135,21 +135,20 @@ def load_data(dir,imagesize):
     directories = glob.glob(dir)
     image = fits.getdata(directories[0], ext=0)
     normmax = np.amax(image)
-    #normalize to [0,255]
-    image *=255/(normmax)
     img = Image.fromarray(image)
     img = img.resize((imagesize,imagesize),Image.LANCZOS )
     images= np.array([np.array(img)[:, :, np.newaxis]])
+    images=(images-np.min(images))/(np.max(images)-np.min(images))
     for i in range(1,len(directories)):
         image = fits.getdata(directories[i], ext=0)
         normmax = np.amax(image)
-        #normalize to [0,255]
-        image*=255/(normmax)
         img = Image.fromarray(image)
         img = img.resize((imagesize,imagesize),Image.LANCZOS )
         image=np.array([np.array(img)[:, :, np.newaxis]])
-        images = np.concatenate([images, image]) #add the rescaled image to the array normalize to [-1,+1]
-    images = (images-127.5)/127.5
+        image=(image-np.min(image))/(np.max(image)-np.min(image))
+        images = np.concatenate([images, image]) #add the rescaled image to the array
+    # normalize to [-1,+1]
+    images = (images-0.5)*2
     return images
 
 
@@ -269,8 +268,8 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
     batches = datagen.flow(X_train,y=None, batch_size = batch_size)
     if Use1sidedLabelSmooth:
         y_real = 0.9
-    y_dis= np.zeros(2*batch_size)
-    y_dis[:batch_size]= y_real
+    y_false= np.zeros(batch_size)
+    y_true = np.ones(batch_size)*y_real
     for e in range(1, epochs+1 ):
         for _ in range(batch_count): #batch_size in version from jacques
             #generate  random noise as an input  to  initialize the  generator
@@ -285,19 +284,17 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
                 if image_batch.shape[0] != batch_size:
                     batches = datagen.flow(X_train,y=None, batch_size = batch_size)
                     image_batch = batches.next()
-
                 image_batch = image_batch.reshape(batch_size, image_size,image_size,1)
                 #Construct different batches of  real and fake data
                 X = np.concatenate([image_batch, generated_images])
                 # Labels for generated and real data
-
+                y_pred = np.concatenate([y_true,y_false])
                 #Pre train discriminator on  fake and real data  before starting the gan.
                 discriminator.trainable=True
-                discriminator.train_on_batch(X, y_dis)
-
+                discriminator.train_on_batch(X, y_pred)
+            discrimRealEval = discriminator.evaluate(image_batch, y_pred[:batch_size],verbose=0)
+            discrimFakeEval = discriminator.evaluate(generated_images, y_pred[batch_size:],verbose=0)
             #evaluations for the cost evolution of the discriminator
-            discrimFakeEval = discriminator.evaluate(X[batch_size:],y_dis[batch_size:],verbose=0)
-            discrimRealEval = discriminator.evaluate(X[:batch_size],y_dis[:batch_size],verbose=0)
             discrFakeLoss[e-1] += discrimFakeEval[0]/batch_count
             discrRealLoss[e-1] += discrimRealEval[0]/batch_count
             discrFakeAccuracy[e-1] += discrimFakeEval[1]/batch_count
@@ -323,6 +320,7 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
             plot_generated_images(e, generator,NoiseLength,image_size)
         if e in saveEpochs:
             saveModel(saveDir,str(e)+'thEpoch.h5',gan,generator,discriminator)
+            plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,discrRealAccuracy,genAccuracy)
     saveModel(saveDir,'finalModel.h5',gan,generator,discriminator)
     plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,discrRealAccuracy,genAccuracy)
 
@@ -382,8 +380,12 @@ V2Artificial = None,CPArtificial = None):
     if V2Artificial is not None and CPArtificial is not None:
         V2observed = tf.constant(V2Artificial)
         CPobserved = tf.constant(CPArtificial)
+    print('len observed')
+    print(len(CPobserved))
     u, u1, u2, u3 = dataObj['u']
     v, v1, v2, v3 = dataObj['v']
+    print('len u1')
+    print(len(u1))
     wavel0 = 1.65 *10**(-6)
     wavelV2 = dataObj['wave'][0]
     wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
@@ -440,7 +442,8 @@ V2Artificial = None,CPArtificial = None):
 
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
-        y_pred = (tf.squeeze(y_pred,axis = 3) +1)/2   #/K.sum(K.sum(y_pred,axis =2),axis =1)
+        y_pred = tf.squeeze(y_pred,axis = 3)
+        y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))   #/K.sum(K.sum(y_pred,axis =2),axis =1)
         #y_pred = y_pred/K.sum(K.sum(y_pred,axis =2),axis=1)
         y_pred = tf.cast((y_pred),tf.complex128)
         y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
@@ -527,7 +530,8 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
 
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
-        y_pred = (tf.squeeze(y_pred,axis = 3) +1)/2   #/K.sum(K.sum(y_pred,axis =2),axis =1)
+        y_pred = tf.squeeze(y_pred,axis = 3)
+        y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))    #/K.sum(K.sum(y_pred,axis =2),axis =1)
         y_pred = tf.cast((y_pred),tf.complex128)
         y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
         ftImages = tf.signal.fft2d(y_pred)#is complex!!
@@ -996,8 +1000,10 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epoch
     #create the network with two cost terms
     discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
     discriminator.trainable =False
+    for layer in discriminator.layers:
+        if layer.__class__.__name__ == 'SpatialDropout2D':
+            layer.trainable = True      
     Generator.trainable = True
-    #Generator.add(Lambda(lambda x: 2*((x-K.min(x))/(K.max(x) -K.min(x)))-1 ))
     fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength)
     # initialize empty arrays to store the cost evolution
     diskyLoss = np.zeros(epochs)
@@ -1019,9 +1025,6 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epoch
         diskyLoss[e-1] += hyperParam*(hist[1])
         fitLoss[e-1] += (hist[2])
         # alter the noise vector each alterationInterval, if the first contribution to the mean and var has been made
-        if e >= beginepoch and e%alterationInterval ==0:
-            theOneNoiseVector = (theOneNoiseVector  + np.random.normal(0,RandomWalkStepSize,NoiseLength))/(1.+RandomWalkStepSize)
-        #update the mean and variance 1 iteration before the noisevector is altered
         if (e+1) >= beginepoch and (e+1-beginepoch)%alterationInterval ==0:
             image = Generator.predict(np.array([theOneNoiseVector for i in range(2)]))[0]
             image = np.squeeze((image+1)/2)
@@ -1033,6 +1036,9 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epoch
         #plot the image contributing to the mean and variance
         if (e+1) % plotinterval== 0:
             plot_generated_images2(e, Generator,theOneNoiseVector,image_Size,pixelSize,saveDir)
+                #update the mean and variance 1 iteration before the noisevector is altered
+        if e >= beginepoch and e%alterationInterval ==0:
+            theOneNoiseVector = (theOneNoiseVector  + np.random.normal(0,RandomWalkStepSize,NoiseLength))/(1.+RandomWalkStepSize)
         plt.close()
     #plot the loss evolution
     plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
@@ -1114,4 +1120,4 @@ def toFits(Image,imageSize,pixelSize,Name,comment= ''):
     header['CRVAL1'] = -imageSize*pixelSize/2000
     header['CRVAL2'] = -imageSize*pixelSize/2000
     prihdu = fits.PrimaryHDU(Image,header=header)
-    prihdu.writeto(Name+'.fits')
+    prihdu.writeto(Name+'.fits',overwrite=True)
