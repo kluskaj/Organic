@@ -134,14 +134,12 @@ returns:
 def load_data(dir,imagesize):
     directories = glob.glob(dir)
     image = fits.getdata(directories[0], ext=0)
-    normmax = np.amax(image)
     img = Image.fromarray(image)
     img = img.resize((imagesize,imagesize),Image.LANCZOS )
     images= np.array([np.array(img)[:, :, np.newaxis]])
     images=(images-np.min(images))/(np.max(images)-np.min(images))
     for i in range(1,len(directories)):
         image = fits.getdata(directories[i], ext=0)
-        normmax = np.amax(image)
         img = Image.fromarray(image)
         img = img.resize((imagesize,imagesize),Image.LANCZOS )
         image=np.array([np.array(img)[:, :, np.newaxis]])
@@ -443,7 +441,7 @@ V2Artificial = None,CPArtificial = None):
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
         y_pred = tf.squeeze(y_pred,axis = 3)
-        ypred = (y_pred+1)/2
+        y_pred = (y_pred+1)/2
         #y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))   #/K.sum(K.sum(y_pred,axis =2),axis =1)
         #y_pred = y_pred/K.sum(K.sum(y_pred,axis =2),axis=1)
         y_pred = tf.cast((y_pred),tf.complex128)
@@ -532,7 +530,7 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
         y_pred = tf.squeeze(y_pred,axis = 3)
-        ypred = (y_pred+1)/2
+        y_pred = (y_pred+1)/2
         #y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))    #/K.sum(K.sum(y_pred,axis =2),axis =1)
         y_pred = tf.cast((y_pred),tf.complex128)
         y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
@@ -661,7 +659,7 @@ returns:
 
 """
 def updateMeanAndVariance(I,mean,variance,image):
-    image = image-np.min(image)
+    #image = image-np.min(image)
     image = image/np.sum(image)
     newmean = mean + (image - mean)/I
     if I > 1:
@@ -928,7 +926,7 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir):
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
-    plt.colorbar(mapable)
+    plt.colorbar(mapable,ticks=np.arange(0., 1.01,0.2))
     plt.savefig(os.path.join(saveDir, 'meanImage.png') )
     plt.close()
 
@@ -1003,9 +1001,9 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epoch
     #create the network with two cost terms
     discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
     discriminator.trainable =False
-    for layer in discriminator.layers:
-        if layer.__class__.__name__ == 'SpatialDropout2D':
-            layer.trainable = True
+    #for layer in discriminator.layers:
+    #    if layer.__class__.__name__ == 'SpatialDropout2D':
+    #        layer.trainable = True
     Generator.trainable = True
     fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength)
     # initialize empty arrays to store the cost evolution
