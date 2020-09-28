@@ -1512,7 +1512,7 @@ class framework:
                                                         dir = dir + str(epoch) +'_'
                                                     for key, values in kwargs.items():
                                                         if key == 'pixelSize':
-                                                            dir = dir + str() +'_'
+                                                            dir = dir + str(pixelSize) +'_'
                                                         elif key == 'x':
                                                             dir = dir + str(x) +'_'
                                                         elif key == 'y':
