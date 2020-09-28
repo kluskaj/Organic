@@ -1318,9 +1318,6 @@ class framework:
         if not os.path.isdir(final_median_dir):
             os.makedirs(final_median_dir)
         plotMeanAndSTD(median,variance,self.imageSize,self.pixelSize,final_median_dir,plotVar = True)
-        print('!!!!!!!!!!!!!!')
-        print(cube.shape)
-        print('!!!!!!!!!!!!!!')
         chi2,v2,cp,fprior = self.likelihoodVal(mean)
         commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
         toFits(mean, self.imageSize, self.pixelSize,'mean',comment = commnt)
@@ -1508,14 +1505,14 @@ class framework:
                                                     self.UDdiameter = UDdiameter
                                                     dir = '[_'
                                                     if len(nrRestarts)>1:
-                                                        dir =dir+str(nrRestarts)+'_'
+                                                        dir =dir+str(nrRestart)+'_'
                                                     if len(mus)>1:
                                                         dir =dir+str(mu)+'_'
                                                     if len(epochs)>1:
                                                         dir = dir + str(epoch) +'_'
                                                     for key, values in kwargs.items():
                                                         if key == 'pixelSize':
-                                                            pixelSizes =values
+                                                            dir = dir + str() +'_'
                                                         elif key == 'x':
                                                             dir = dir + str(x) +'_'
                                                         elif key == 'y':

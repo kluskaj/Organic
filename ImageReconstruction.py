@@ -22,8 +22,8 @@ hyperParam = 1 # the hyperParam tuning the strength of the regularization
 image_Size = 128 #pixel size of the image which are created (needs to be the same as used during GAN training)
 NoiseLength = 100 #length of the inputvector suplied to the generator
 epochs = 250 #the number of iterations
-numberOfRestarts = 100 #the number of times to restart the image computation for a different noise vector
-BoothstrappinIter = 100 #the number of times to alter the dataset during Boothstrapping
+numberOfRestarts = 10 #the number of times to restart the image computation for a different noise vector
+BoothstrappinIter = 5 #the number of times to alter the dataset during Boothstrapping
 
 #define the optimizer used to finetune the generator
 optimizer=Adam(learning_rate=0.0001,beta_1=0.91,beta_2=0.999,amsgrad=False)
@@ -96,7 +96,6 @@ reconstr.setSparco(x,y,UDflux,PointFlux,denv,dsec,UDdiameter)
 #mean, varianceImage = reconstr.bootstrappingReconstr(BoothstrappinIter,numberOfRestarts,epochs,hyperParam)
 
 #Run this line to create a grid
-
 reconstr.runGrid(nrRestarts =[numberOfRestarts],epochs = [epochs], mus = [1,4],pixelSize=[0.6,0.5],dsec = [-2,0])
 
 # store the mean and variance image
