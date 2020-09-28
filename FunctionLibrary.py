@@ -1322,10 +1322,10 @@ class framework:
         print(cube.shape)
         print('!!!!!!!!!!!!!!')
         chi2,v2,cp,fprior = self.likelihoodVal(mean)
-        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fpriot)]
+        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
         toFits(mean, self.imageSize, self.pixelSize,'mean',comment = commnt)
         chi2,v2,cp,fprior = self.likelihoodVal(median)
-        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fpriot)]
+        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
         toFits(median, self.imageSize, self.pixelSize, 'median',comment = commnt)
         toFits(variance, self.imageSize, self.pixelSize, 'variace',comment = ['std^2'])
         toFits(cube, self.imageSize, self.pixelSize, 'Bootstrapping_ImageCube',cube.shape[0],ctype3 ='random baseinline selection number')
