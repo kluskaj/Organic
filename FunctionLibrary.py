@@ -1294,7 +1294,7 @@ class framework:
         cube = np.array([None])
         for I in range(iterations):
             print(epochs)
-            m,v = self.AveragingImageReconstruction(        nrRestarts,
+            m = self.AveragingImageReconstruction(        nrRestarts,
                                                             epochs,
                                                             hyperParam ,
                                                             plotvar,
