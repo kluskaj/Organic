@@ -20,6 +20,8 @@ import tensorflow as tf
 #import datafuncRik
 import ReadOIFITS as oi
 import scipy.special as sp
+from matplotlib import gridspec
+import matplotlib.colors as colors
 ################################################################################
 ############################### for GAN training ####################################
 ################################################################################
@@ -41,11 +43,11 @@ def createDataGen():
         # randomly shift images vertically (fraction of total height)
         height_shift_range=0,
         shear_range=0.,  # set range for random shear
-        zoom_range=0.1,  # set range for random zoom
+        zoom_range=[1.3,1.7],  # set range for random zoom
         channel_shift_range=0.,  # set range for random channel shifts
         # set mode for filling points outside the input boundaries
         fill_mode='nearest',
-        cval=0.,  # value used for fill_mode = "constant"
+        cval=-1.,  # value used for fill_mode = "constant"
         horizontal_flip=False,  # randomly flip images
         vertical_flip=False,  # randomly flip images
         # set rescaling factor (applied before any other transformation)
@@ -122,7 +124,7 @@ def create_gan(discriminator, generator, NoiseLength,opt):
     return gan
 
 """
-load_data
+load_data_fromDirs
 
 parameters:
     dir: a directory where the training images can be found (must contain * to expand and find multiple images)
@@ -135,21 +137,60 @@ def load_data(dir,imagesize):
     directories = glob.glob(dir)
     image = fits.getdata(directories[0], ext=0)
     img = Image.fromarray(image)
-    img = img.resize((imagesize,imagesize),Image.LANCZOS )
+    img = img.resize((imagesize,imagesize),Image.BILINEAR )
     images= np.array([np.array(img)[:, :, np.newaxis]])
-    images=(images-np.min(images))/(np.max(images)-np.min(images))
+    images = images/np.max(images)
+    #images=(images-np.min(images))/(np.max(images)-np.min(images))
     for i in range(1,len(directories)):
         image = fits.getdata(directories[i], ext=0)
         img = Image.fromarray(image)
-        img = img.resize((imagesize,imagesize),Image.LANCZOS )
+        img = img.resize((imagesize,imagesize),Image.BILINEAR )
         image=np.array([np.array(img)[:, :, np.newaxis]])
-        image=(image-np.min(image))/(np.max(image)-np.min(image))
+        #image=(image-np.min(image))/(np.max(image)-np.min(image))
+        image = image/np.max(image)
         images = np.concatenate([images, image]) #add the rescaled image to the array
     # normalize to [-1,+1]
     images = (images-0.5)*2
     return images
 
+"""
+load_data_fromCube
 
+parameters:
+    dir: a directory where the training images can be found (must contain * to expand and find multiple images)
+    imagesize: the size to which the obtained images will be rescaled (imagesize*imagesize pixels)
+returns:
+    images: a numpy array containing the image information and dimensions (number of images *imagesize*imagesize*1 )
+
+"""
+def load_data_fromCube(dir,imagesize):
+    cube = fits.getdata(dir, ext=0)
+    img = Image.fromarray(cube[0])
+    img = img.resize((imagesize,imagesize),Image.BILINEAR )
+    images= np.array([np.array(img)[:, :, np.newaxis]])
+    images = images/np.max(images)
+    #images=(images-np.min(images))/(np.max(images)-np.min(images))
+    for i in range(1,len(cube)):
+        if i == 41:
+            plt.figure()
+            plt.imshow(np.squeeze(cube[i]),interpolation=None,cmap='hot')
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig('example loadedImage.png')
+            plt.close()
+            continue
+        image = cube[i]
+        img = Image.fromarray(image)
+        img = img.resize((imagesize,imagesize),Image.BILINEAR )
+        image=np.array([np.array(img)[:, :, np.newaxis]])
+        #image=(image-np.min(image))/(np.max(image)-np.min(image))
+        image = image/np.max(image)
+        images = np.concatenate([images, image]) #add the rescaled image to the array
+    # normalize to [-1,+1]
+    images = (images-0.5)*2
+    print('images')
+    print(images.shape)
+    return images
 """
 plot_generated_images
 
@@ -161,14 +202,14 @@ effect:
     saves images contain a number of random example images created by the generator
 
 """
-def plot_generated_images(epoch, generator,NoiseLength,image_Size, examples=100, dim=(10, 10), figsize=(10, 10)):
-    noise= np.random.normal(loc=0, scale=1, size=[examples, NoiseLength])
+def plot_generated_images(epoch, generator,NoiseLength,image_Size, examples=36, dim=(6, 6), figsize=(10, 10)):
+    noise= np.random.normal(loc=0, scale=1, size=[examples,NoiseLength])
     generated_images = generator.predict(noise)
-    generated_images = generated_images.reshape(100,image_Size,image_Size)
+    generated_images = generated_images.reshape(examples,image_Size,image_Size)
     plt.figure(figsize=figsize)
     for i in range(generated_images.shape[0]):
         plt.subplot(dim[0], dim[1], i+1)
-        plt.imshow(generated_images[i],interpolation=None)
+        plt.imshow(generated_images[i],interpolation=None,cmap='hot')
         plt.axis('off')
     plt.tight_layout()
     plt.savefig('cgan_generated_image %d.png' %epoch)
@@ -210,13 +251,6 @@ def saveModel(save_dir,model_name,GAN,generator,discr):
 
 
 
-#discriminator = create_discriminator()
-def modelCompiler(layers,optim,metr = None):
-    model =  Sequential()
-    for i in layers:
-        model.add(i)
-    model.compile(loss ='binary_crossentropy',optimizer = optim,metrics = metr)
-    return model
 
 
 
@@ -244,11 +278,11 @@ effect:
 def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, batch_size=128,OverTrainDiscr=1,saveDir=None, PlotEpochs = 5,Use1sidedLabelSmooth = True, saveEpochs = []):
     #Loading the data
     #global generator
-    generator = gen#modelCompiler(gen,optim)
+    generator = gen
     #global discriminator
     discriminator = discr#modelCompiler(discr,optim,metr=["accuracy"])
     #discriminator.compile(loss='binary_crossentropy', optimizer=optim,metrics=["accuracy"])
-    X_train = load_data(dir,image_size)
+    X_train = load_data_fromCube(dir,image_size)
     batch_count = int(np.ceil(X_train.shape[0] / batch_size))
     # Creating GAN
     gan = create_gan(discriminator, generator,NoiseLength,optim)
@@ -278,6 +312,12 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
             for i in range(OverTrainDiscr):
                 # Get a random set of  real images
                 image_batch = batches.next()
+                #plt.figure()
+                #plt.imshow(np.squeeze(image_batch[1]),interpolation=None,cmap='hot')
+                #plt.axis('off')
+                #plt.tight_layout()
+                #plt.savefig('example loadedImage %d.png'%e)
+                #plt.close()
                 # if the batch created by the generator is too small, resample
                 if image_batch.shape[0] != batch_size:
                     batches = datagen.flow(X_train,y=None, batch_size = batch_size)
@@ -364,30 +404,45 @@ dsec,
 UDdiameter,
 pixelSize,
 forTraining = True,
-V2Artificial = None,CPArtificial = None):
+V2Artificial = None,
+CPArtificial = None,
+bootstrap = False,
+bootstrapDir =None
+        ):
     data = oi.read(DataDir,filename)
     dataObj = data.givedataJK()
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)
+    if bootstrap == True:
+        V2selection = np.random.randint(0,nV2,nV2)
+        V2observed, V2err =V2observed[V2selection], V2err[V2selection]
     V2observed = tf.constant(V2observed)#conversion to tensor
     V2err = tf.constant(V2err)#conversion to tensor
     CPobserved, CPerr = dataObj['cp']
     nCP = len(CPerr)
+    if bootstrap == True:
+        CPselection = np.random.randint(0,nCP,nCP)
+        CPobserved = CPobserved[CPselection]
     CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
     CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
+        if bootstrap == True:
+            V2Artificial = V2Artificial[V2selection]
+            CPerr = CPerr[CPselection]
         V2observed = tf.constant(V2Artificial)
         CPobserved = tf.constant(CPArtificial)
-    print('len observed')
-    print(len(CPobserved))
     u, u1, u2, u3 = dataObj['u']
     v, v1, v2, v3 = dataObj['v']
-    print('len u1')
-    print(len(u1))
+    if bootstrap == True:
+        u, u1, u2, u3 = u[V2selection], u1[CPselection], u2[CPselection], u3[CPselection]
+        v, v1, v2, v3 = v[V2selection], v1[CPselection], v2[CPselection], v3[CPselection]
     wavel0 = 1.65 *10**(-6)
     wavelV2 = dataObj['wave'][0]
-    wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
     wavelCP = dataObj['wave'][1]
+    if bootstrap == True:
+        wavelV2 = wavelV2[V2selection]
+        wavelCP = wavelCP[CPselection]
+    wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
     wavelCP = tf.constant(wavelCP,dtype = tf.complex128) #conversion to tensor
      #divide u,v by this number to get the pixelcoordinate
     x = x*np.pi*0.001/(3600*180)
@@ -396,17 +451,16 @@ V2Artificial = None,CPArtificial = None):
     PointFlux = PointFlux/100
     UDdiameter = UDdiameter * np.pi*0.001/(3600*180)
     spacialFreqPerPixel = (3600/(0.001*ImageSize*pixelSize))*(180/np.pi)
+
+    #computes the complex vilibility contribution of a point source at position x,y(in radian) at spatialfrequencys u,v
     def offcenterPointFT(x,y,u,v):
         u = tf.constant(u,dtype = tf.complex128)
         v = tf.constant(v,dtype = tf.complex128)
         return tf.math.exp(-2*np.pi*1j*(x*u+y*v))
 
-    #u,v must be provided in pixel number!!!
+    #preforms a binlinear interpolation on grid at continious pixel coordinates ufunc,vfunc
     def bilinearInterp(grid,ufunc,vfunc):
-        #assert(max(ufunc)>255)),"u too big"
-        #assert(ufunc<0),"u too small"
-        #assert(vfunc>255),"v too big"
-        #assert(vfunc<0), "v too small"
+
         ubelow = np.floor(ufunc).astype(int)
         vbelow = np.floor(vfunc).astype(int)
         uabove = ubelow +1
@@ -422,7 +476,119 @@ V2Artificial = None,CPArtificial = None):
 
         return interpValues
 
+    #plots a comperison between observations and observables of the reconstruction,aswell as the uv coverage
+    def plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr):
+        #v2 with residual comparison
+        plt.figure(figsize=(3.5, 6))
+        maskv2 = V2err < 0.5
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
+        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=30,label = 'image',c = np.real(wavelV2.numpy())[maskv2],cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(absB,V2observed[maskv2],marker='*',s=30,label = 'observed',cmap ='rainbow',c = np.real(wavelV2.numpy())[maskv2],alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='k')
+        plt.ylim(0,1)
+        plt.ylabel(r'$V^2$')
+        plt.legend()
 
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = np.real(wavelV2)[maskv2],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors ='k',linewidth=0.15)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.xlabel(r'$\mid B\mid (M\lambda)$')
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(),'V2comparison.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparison.png'))
+
+        #v2 with residual comparison, no colors indicating wavelength
+        plt.figure(figsize=(3.5, 6))
+        maskv2 = V2err < 0.5
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
+        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=40,label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(absB,V2observed[maskv2],marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='r')
+        plt.ylim(0,1)
+        plt.ylabel(r'$V^2$')
+        plt.legend()
+
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.xlabel(r'$\mid B\mid (M\lambda)$')
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(),'V2comparisonNoColor.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparisonNoColor.png'))
+
+        #plots the uv coverage
+        plt.figure()
+        plt.scatter(u/(10**6),v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+        plt.scatter(-u/(10**6),-v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+        plt.xlabel(r'$ u (M\lambda)$')
+        plt.ylabel(r'$ v (M\lambda)$')
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(), 'uvCoverage.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/uvCoverage.png'))
+
+
+        #cp with residual comparison
+        plt.figure(figsize=(3.5, 6))
+        maskcp = CPerr < 10.0
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
+        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',cmap ='rainbow',c = np.real(wavelCP.numpy())[maskcp],alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='k')
+        plt.legend()
+        plt.ylabel(r'closure phase(radian)',fontsize =12)
+
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = np.real(wavelCP)[maskcp],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors=colors.to_rgba('k', 0.1), linewidth=0.15)
+        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
+        #c[0].set_color(color)
+
+        plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(), 'cpComparison.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparison.png'))
+
+        #cp with residual comparison without color indicating wavelength
+        plt.figure(figsize=(3.5, 6))
+        maskcp = CPerr < 10.0
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
+        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='r')
+        plt.legend()
+        plt.ylabel(r'closure phase(radian)',fontsize =12)
+
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
+        #c[0].set_color(color)
+
+        plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(),'cpComparisonNoColor.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparisonNoColor.png'))
     def compTotalCompVis(ftImages,ufunc,vfunc, wavelfunc):
         #to compute the radial coordinate in the uv plane so compute the ft of the primary, which is a uniform disk, so the ft is....
         radii = np.pi*UDdiameter*np.sqrt(ufunc**2 + vfunc**2)
@@ -466,9 +632,13 @@ V2Artificial = None,CPArtificial = None):
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
         if forTraining == True:
             return  tf.cast(lossValue,tf.float32)
-        else: return lossValue, V2loss , CPloss
+
+        else:
+            plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr)
+            return lossValue, V2loss , CPloss
 
     return internalloss
+
 
 
 
@@ -488,25 +658,39 @@ returns:
     data likelihood cost function for the provided data
 
 """
-def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = True,V2Artificial = None,CPArtificial = None):
+def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = True,V2Artificial = None,CPArtificial = None,bootstrap= False):
     data = oi.read(DataDir,filename)
     dataObj = data.givedataJK()
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)
+    if bootstrap == True:
+        V2selection = np.random.randint(0,nV2)
+        V2observed, V2err =V2observed[V2selection], V2err[V2selection]
     V2observed = tf.constant(V2observed)#conversion to tensor
     V2err = tf.constant(V2err)#conversion to tensor
     CPobserved, CPerr = dataObj['cp']
-    nCP = len(CPerr)
+    if bootstrap == True:
+        CPselection = np.random.randint(0,nCP)
+        CPobserved = CPobserved[CPselection]
     CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
     CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
+        if bootstrap == True:
+            V2Artificial = V2Artificial[V2selection]
+            CPerr = CPerr[CPselection]
         V2observed = tf.constant(V2Artificial)
         CPobserved = tf.constant(CPArtificial)
     u, u1, u2, u3 = dataObj['u']
     v, v1, v2, v3 = dataObj['v']
+    if bootstrap == True:
+        u, u1, u2, u3 = u[V2selection], u1[CPselection], u2[CPselection], u3[CPselection]
+        v, v1, v2, v3 = v[V2selection], v1[CPselection], v2[CPselection], v3[CPselection]
     wavelV2 = dataObj['wave'][0]
-    wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
     wavelCP = dataObj['wave'][1]
+    if bootstrap == True:
+        wavelV2 = wavelV2[V2selection]
+        wavelCP = wavelCP[CPselection]
+    wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
     wavelCP = tf.constant(wavelCP,dtype = tf.complex128) #conversion to tensor
     spacialFreqPerPixel = (3600/(0.001*ImageSize*pixelSize))*(180/np.pi)
 
@@ -525,6 +709,7 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
         return interpValues
+
 
 
     def internalloss(y_true,y_pred):
@@ -618,7 +803,7 @@ def plot_generated_images2(epoch, generator,theOneNoiseVector,image_Size,pixelSi
     generated_images = generated_images.reshape(100,image_Size,image_Size)
 
     plt.figure()
-    mapable = plt.imshow((generated_images[0]+1)/2,origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= np.min((generated_images[0]+1)/2),vmax =np.max((generated_images[0]+1)/2))
+    mapable = plt.imshow((generated_images[0]+1)/2,origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= np.min((generated_images[0]+1)/2),vmax =np.max((generated_images[0]+1)/2),interpolation=None)
     np.save('cgan_generated_image %d.png' %epoch,(generated_images[0]+1)/2)
     ax = plt.gca()
     ax.invert_xaxis()
@@ -710,197 +895,84 @@ def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[],save_dir = ''):
 
 
     #plots the regularization cost term as a function of epoch on a log scale
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.plot(epoch,np.log10(diskyLoss),c = c,alpha=0.7)
-    plt.legend()
-    plt.ylabel(r'$\mu f_{prior}$')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_discriminatorEvolution.png'))
+    #fig4 = plt.figure()
+    #color=iter(cm.rainbow(np.linspace(0,1,3)))
+    #c=next(color)
+    #plt.plot(epoch,np.log10(diskyLoss),c = c,alpha=0.7)
+    #plt.legend()
+    #plt.ylabel(r'$\mu f_{prior}$')
+    #plt.xlabel('epoch')
+    #plt.savefig(os.path.join(save_dir, 'Log10_Loss_discriminatorEvolution.png'))
 
     #plots the data likelihood term as a function of epoch on a log scale
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.plot(epoch,np.log10(fitLoss),c = c,alpha=0.7)
-    plt.legend()
-    plt.ylabel(r'$f_{data}$')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_fitevolution.png'))
+    #fig4 = plt.figure()
+    #color=iter(cm.rainbow(np.linspace(0,1,3)))
+    #c=next(color)
+    #plt.plot(epoch,np.log10(fitLoss),c = c,alpha=0.7)
+    #plt.legend()
+    #plt.ylabel(r'$f_{data}$')
+    #plt.xlabel('epoch')
+    #plt.savefig(os.path.join(save_dir, 'Log10_Loss_fitevolution.png'))
 
 
     #plots the total objective function as a function of epoch
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.plot(epoch,np.log10(fitLoss+diskyLoss),c = c,alpha=0.7)
-    plt.legend()
-    plt.ylabel(r'$f_{data}+\mu f_{prior}$')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
+    #fig4 = plt.figure()
+    #color=iter(cm.rainbow(np.linspace(0,1,3)))
+    #c=next(color)
+    #plt.plot(epoch,np.log10(fitLoss+diskyLoss),c = c,alpha=0.7)
+    #plt.legend()
+    #plt.ylabel(r'$f_{data}+\mu f_{prior}$')
+    #plt.xlabel('epoch')
+    #plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
 
     #plots the dataLikelihood troughout training agains the regularization term
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
-    plt.legend()
-    plt.ylabel(r'$\mu f_{prior}$')
-    plt.xlabel(r'$f_{data}$')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
+    #fig4 = plt.figure()
+    #color=iter(cm.rainbow(np.linspace(0,1,3)))
+    #c=next(color)
+    #plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
+    #plt.legend()
+    #plt.ylabel(r'$\mu f_{prior}$')
+    #plt.xlabel(r'$f_{data}$')
+    #plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
 
 
     #plots the dataLikelihood troughout training agains the regularization term, zoomed in on the origin
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
-    plt.legend()
-    plt.ylabel(r'$\mu f_{prior}$')
-    plt.xlabel(r'$f_{data}$')
-    plt.ylim(0,10)
-    plt.xlim(0,10)
-    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100range.png') )
+    #fig4 = plt.figure()
+    #color=iter(cm.rainbow(np.linspace(0,1,3)))
+    #c=next(color)
+    #plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
+    #plt.legend()
+    #plt.ylabel(r'$\mu f_{prior}$')
+    #plt.xlabel(r'$f_{data}$')
+    #plt.ylim(0,10)
+    #plt.xlim(0,10)
+    #plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100range.png') )
 
     ##plots the dataLikelihood troughout training agains the regularization term divided by the hyperParam, zoomed in on the origin
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(fitLoss,diskyLoss/hyperParam,c = c,alpha=0.5)
-    plt.legend()
-    plt.ylabel(r'$ f_{prior}$')
-    plt.xlabel(r'$f_{data}$')
-    plt.ylim(0,100)
-    plt.xlim(0,100)
-    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100rangeNoMu.png') )
+    #fig4 = plt.figure()
+    #color=iter(cm.rainbow(np.linspace(0,1,3)))
+    #c=next(color)
+    #plt.scatter(fitLoss,diskyLoss/hyperParam,c = c,alpha=0.5)
+    #plt.legend()
+    #plt.ylabel(r'$ f_{prior}$')
+    #plt.xlabel(r'$f_{data}$')
+    #plt.ylim(0,100)
+    #plt.xlim(0,100)
+    #plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100rangeNoMu.png') )
 
     #plots the dataLikelihood troughout training agains the regularization term, on a log scale
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(np.log10(fitLoss),np.log10(diskyLoss),c = c,alpha=0.5)
-    plt.ylabel(r'$log_{10}(\mu f_{prior })$')
-    plt.xlabel(r'$log_{10}(f_{data})$')
-    plt.savefig(os.path.join(save_dir, 'logdiscrLossVSFitLossNo.png'))
+    #fig4 = plt.figure()
+    #color=iter(cm.rainbow(np.linspace(0,1,3)))
+    #c=next(color)
+    #plt.scatter(np.log10(fitLoss),np.log10(diskyLoss),c = c,alpha=0.5)
+    #plt.ylabel(r'$log_{10}(\mu f_{prior })$')
+    #plt.xlabel(r'$log_{10}(f_{data})$')
+    #plt.savefig(os.path.join(save_dir, 'logdiscrLossVSFitLossNo.png'))
 
 
 
 
-"""
-plotEvolution
 
-parameters:
-    epoch: array or list containing the epochs of training at which values are plotted
-    diskyLoss: array or list holding the cost computed for the discriminators output at the given epochs
-    fitLoss: array or list holding the cost computed using the data likelihood at the given epochs
-returns:
-    Makes various plots of both the components of the objective function and the total objective function itself
-
-"""
-def plotEvolution(epoch,hyperParam,diskyLoss=[],fitLoss=[],save_dir=''):
-    # plots of both terms of the objective function and the total objective function itself as  a function of epoch
-    fig1 = plt.figure()
-    plt.plot(epoch,diskyLoss,label = r'$\mu f_{prior}$',c = 'b',alpha=0.5)
-    plt.plot(epoch,fitLoss,label = r'$f_{data}$',c = 'g',alpha=0.5)
-    plt.plot(epoch,fitLoss+diskyLoss,label = r'$f_{data}+\mu f_{prior}$',c = 'r',alpha=0.5)
-    plt.legend()
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Loss_evolution.png'))
-    fig2 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-
-    #plots of both terms of the objective function and the total objective function itself as  a function of epoch on log scale
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.plot(epoch,np.log10(diskyLoss),label = r'$\mu f_{prior}$',c = c,alpha=0.7)
-    c=next(color)
-    plt.plot(epoch,np.log10(fitLoss),label = r'$f_{data}$',c = c,alpha=0.7)
-    c=next(color)
-    plt.plot(epoch,np.log10(fitLoss+diskyLoss),label = r'$f_{data}+\mu f_{prior}$',c = c,alpha=0.7)
-    plt.legend()
-    plt.ylabel(r'$log_{10}$(loss)')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_evolution.png'))
-
-
-    #plots the regularization cost term as a function of epoch on a log scale
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.plot(epoch,np.log10(diskyLoss),c = c,alpha=0.7)
-    plt.legend()
-    plt.ylabel(r'$log_{10}(\mu f_{prior})$')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_discriminatorEvolution.png'))
-
-    #plots the data likelihood term as a function of epoch on a log scale
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.plot(epoch,np.log10(fitLoss),c = c,alpha=0.7)
-    plt.legend()
-    plt.ylabel(r'$log_{10}(f_{data})$')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_fitevolution.png'))
-
-
-    #plots the total objective function as a function of epoch
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.plot(epoch,np.log10(fitLoss+diskyLoss),c = c,alpha=0.7)
-    plt.legend()
-    plt.ylabel(r'$log(f_{data}+\mu f_{prior})$')
-    plt.xlabel('epoch')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
-
-    #plots the dataLikelihood troughout training agains the regularization term
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
-    plt.legend()
-    plt.ylabel(r'$\mu f_{prior}$')
-    plt.xlabel(r'$f_{data}$')
-    plt.savefig(os.path.join(save_dir, 'Log10_Loss_TotalEvolution.png'))
-
-
-    #plots the dataLikelihood troughout training agains the regularization term, zoomed in on the origin
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(fitLoss,diskyLoss,c = c,alpha=0.5)
-    plt.legend()
-    plt.ylabel(r'$\mu f_{prior}$')
-    plt.xlabel(r'$f_{data}$')
-    plt.ylim(0,10)
-    plt.xlim(0,10)
-    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100range.png') )
-
-    ##plots the dataLikelihood troughout training agains the regularization term divided by the hyperParam, zoomed in on the origin
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(fitLoss,diskyLoss/hyperParam,c = c,alpha=0.5)
-    plt.legend()
-    plt.ylabel(r'$ f_{prior}$')
-    plt.xlabel(r'$f_{data}$')
-    plt.ylim(0,100)
-    plt.xlim(0,100)
-    plt.savefig(os.path.join(save_dir, 'discrLossVSFitLoss100rangeNoMu.png') )
-
-    #plots the dataLikelihood troughout training agains the regularization term, on a log scale
-    fig4 = plt.figure()
-    color=iter(cm.rainbow(np.linspace(0,1,3)))
-    c=next(color)
-    plt.scatter(np.log10(fitLoss),np.log10(diskyLoss),c = c,alpha=0.5)
-    plt.ylabel(r'$log_{10}(\mu f_{prior })$')
-    plt.xlabel(r'$log_{10}(f_{data})$')
-    plt.savefig(os.path.join(save_dir, 'logdiscrLossVSFitLossNo.png'))
 
 
 
@@ -918,7 +990,7 @@ effect:
 
 
 """
-def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir):
+def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
     # plots the mean image,
     plt.figure()
     mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
@@ -926,9 +998,11 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir):
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
-    plt.colorbar(mapable,ticks=np.arange(0., 1.01,0.2))
-    plt.savefig(os.path.join(saveDir, 'meanImage.png') )
+    plt.colorbar(mapable)
+    plt.savefig(os.path.join(saveDir, 'Image.png') )
     plt.close()
+
+    if not plotVar: return
 
     #plots the variance image
     plt.figure()
@@ -964,6 +1038,19 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir):
     plt.savefig(os.path.join(saveDir,'Sign3image.png'))
     plt.close()
 
+    #plot the mean image with a 5 and 3 sigma significance contour.
+    plt.figure()
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
+    plt.contour(mean/np.sqrt(variance), [3.,5.],linewidths = 0.9,linestyles =['dashed','solid'], colors='b', origin='lower', extent=[-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2])
+    ax = plt.gca()
+    ax.invert_xaxis()
+    plt.xlabel(r'$\Delta \alpha (mas)$')
+    plt.ylabel(r'$\Delta \delta (mas)$')
+    plt.colorbar(mapable)
+    plt.savefig(os.path.join(saveDir,'Sign5and3image.png'))
+    plt.close()
+
+
     #plots the corresponding mean over standard deviation map
     plt.figure()
     mapable = plt.imshow(mean/np.sqrt(variance),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot')
@@ -989,15 +1076,15 @@ parameters:
         beginepoch: the epoch at which the first contribution to the mean image is made
         RandomWalkStepSize: size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*)
         alterationInterval: number of epochs between a an additional contribution to the mean and variance image
-    plotinterval: the epoch interval between changes to the Noisevector and contributions to the
-    saveDir: directory to store the generator in its final state
+        plotinterval: the epoch interval between changes to the Noisevector and contributions to the
+        saveDir: directory to store the generator in its final state
 Returns:
     the reconstructed image (mean over noisevectors)
 
 
 
 """
-def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000,saveDir  = ''):
+def reconsructionOLDway(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000,saveDir  = ''):
     #create the network with two cost terms
     discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
     discriminator.trainable =False
@@ -1049,22 +1136,20 @@ def reconsruction(Generator, discriminator,opt,dataLikelihood , pixelSize ,epoch
     return mean, variance, diskyLoss, fitLoss
 
 
-
 """
 reconsruction
 
 parameters:
-    nrRestarts: the number of times the generator is reset to its initial state
-    generator: the pre trained generator to use
-    discriminator: the pre trained discriminator to use
-    dataLikelihood: the data likelihood to use
-    epochs: the nulber of epochs for which to retrain the generator
-    image_Size: the number of pixels in the images allong one axis
-    hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
-    NoiseLength: the length of the noisevector used as input for the generator
-    beginepoch: the epoch at which the first contribution to the mean image is made
-    RandomWalkStepSize: size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*)
-    alterationInterval: number of epochs between a an additional contribution to the mean and variance image
+        generator: the pre trained generator to use
+        discriminator: the pre trained discriminator to use
+        dataLikelihood: the data likelihood to use
+        epochs: the nulber of epochs for which to retrain the generator
+        image_Size: the number of pixels in the images allong one axis
+        hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
+        NoiseLength: the length of the noisevector used as input for the generator
+        beginepoch: the epoch at which the first contribution to the mean image is made
+        RandomWalkStepSize: size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*)
+        alterationInterval: number of epochs between a an additional contribution to the mean and variance image
     plotinterval: the epoch interval between changes to the Noisevector and contributions to the
     saveDir: directory to store the generator in its final state
 Returns:
@@ -1073,52 +1158,426 @@ Returns:
 
 
 """
-def restartingImageReconstruction(nrRestarts,Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000):
+def SingleRun(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 250,image_Size = 128,hyperParam = 2,NoiseLength = 100,saveDir  = '',plotAtEpoch = [],loud = False):
+    #create the network with two cost terms
+    discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
+    discriminator.trainable =False
+    #for layer in discriminator.layers:
+    #    if layer.__class__.__name__ == 'SpatialDropout2D':
+    #        layer.trainable = True
+    Generator.trainable = True
+    fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength)
+    # initialize empty arrays to store the cost evolution
+    diskyLoss = np.zeros(epochs)
+    fitLoss = np.zeros(epochs)
+    # make an array with the epoch of the reconstruction
+    epoch = np.linspace(1,epochs,epochs)
+    #initialize the mean and variance images
     mean = np.zeros([image_Size,image_Size])
     variance = np.zeros([image_Size,image_Size])
-    for r in range(nrRestarts):
-        GeneratorCopy = tf.keras.models.clone_model(Generator)
-        GeneratorCopy.set_weights(Generator.get_weights())
-        Iter_dir = os.path.join(os.getcwd(), str(r))
-        if not os.path.isdir(Iter_dir):
-            os.makedirs(Iter_dir)
-        m, v, diskyLoss, fitLoss = reconsruction(GeneratorCopy,
-                                        discriminator,
-                                        opt,
-                                        dataLikelihood,
-                                        pixelSize,
-                                        epochs,
-                                        image_Size,
-                                        hyperParam,
-                                        NoiseLength,
-                                        beginepoch,
-                                        RandomWalkStepSize,
-                                        alterationInterval,
-                                        plotinterval,
-                                        saveDir  = Iter_dir)
-        mean, variance = updateMeanAndVariance(r+1,mean,variance,m)
-        del GeneratorCopy
-    final_dir = os.path.join(os.getcwd(), 'finalImage')
-    if not os.path.isdir(final_dir):
-        os.makedirs(final_dir)
-    plotMeanAndSTD(mean,variance,image_Size,pixelSize,final_dir)
+    # start tracking the amount of contributions made to the mean and variance image
+    i = 1
+    # initialize a initial random noise vector
+    theOneNoiseVector = np.random.normal(0,1,NoiseLength)
+    y_gen =[np.ones(1),np.ones(1)]
+    for e in range(1, epochs+1 ):
+        #generate  random noise as an input  to  initialize the  generator
+        noise= np.array([theOneNoiseVector])
+        hist= fullNet.train_on_batch(noise, y_gen)
+        diskyLoss[e-1] += hyperParam*(hist[1])
+        fitLoss[e-1] += (hist[2])
+        # alter the noise vector each alterationInterval, if the first contribution to the mean and var has been made
+        if e == epochs:
+            image = Generator.predict(np.array([theOneNoiseVector for i in range(2)]))[0]
+            mean = np.squeeze((image+1)/2)
+        #plot the image at the specified epochs
+        if e in plotAtEpoch:
+            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size,pixelSize,saveDir)
+            plt.close()
+    #plot the loss evolution
+    if loud == True:
+        plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
+        #plot and store the mean and variance image
+        plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir)
 
-    return mean, variance
+    return mean, diskyLoss, fitLoss
 
-def toFits(Image,imageSize,pixelSize,Name,comment= ''):
+
+
+
+
+def toFits(Image,imageSize,pixelSize,Name,comment= [''],depth = None,ctype3 ='' ):
     header = fits.Header()
     header['SIMPLE'] = 'T'
     header['BITPIX']  = -64
     header['NAXIS'] = 2
     header['NAXIS1'] = imageSize
     header['NAXIS2']  =  imageSize
+    if depth != None:
+        header['NAXIS3']  =  depth
     header['EXTEND']  = 'T'
     header['CTYPE1']  = 'X [arcsec]'
     header['CTYPE2']  = 'Y [arcsec]'
-    header['COMMENT'] = comment
-    header['CDELT1'] = pixelSize/1000
-    header['CDELT2'] = pixelSize/1000
-    header['CRVAL1'] = -imageSize*pixelSize/2000
-    header['CRVAL2'] = -imageSize*pixelSize/2000
+    header['CRVAL1']  = (0.0,'Coordinate system value at reference pixel')
+    header['CRVAL2']  = (0.0,'Coordinate system value at reference pixel')
+    header['CRPIX1']  =  imageSize/2
+    header['CRPIX2']  =  imageSize/2
+    header['CTYPE1']  = ('milliarcsecond', 'RA in mas')
+    header['CTYPE2']  = ('milliarcsecond', 'DEC in mas')
+    header['CDELT1'] = pixelSize
+    header['CDELT2'] = pixelSize
+    header['CRVAL1'] =0
+    header['CRVAL2'] =0
+    if depth != None:
+        header['CDELT3']  =  1.
+        header['CTYPE3']  = ctype3
+    for c in comment:
+        header['COMMENT'] = c
     prihdu = fits.PrimaryHDU(Image,header=header)
     prihdu.writeto(Name+'.fits',overwrite=True)
+
+
+
+class framework:
+    def __init__(self, DataDir,filename,imageSize,pixelSize,generator,discriminator,opt,NoiseLength = 100):
+        self.DataDir = DataDir
+        self.filename= filename
+        self.imageSize = imageSize
+        self.pixelSize = pixelSize
+        self.generator = generator
+        self.discriminator = discriminator
+        self.NoiseLength = NoiseLength
+        self.opt = opt
+        self.useSparco = False
+        self.V2Artificial = None
+        self.CPArtificial = None
+        self.useSparco= False
+    def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter):
+        self.x =x
+        self.y =y
+        self.UDflux = UDflux
+        self.PointFlux= PointFlux
+        self.denv = denv
+        self.dsec = dsec
+        self.UDdiameter =UDdiameter
+        self.useSparco = True
+    def useArtificialDataNP(self,V2Artificial,CPArtificial):
+        self.V2Artificial = V2Artificial
+        self.CPArtificial = CPArtificial
+
+
+
+    """
+    bootstrappingReconstr
+
+    parameters:
+        self: frameworkclass
+        iterations: the number of times a different sampling of the baselines is used.
+        nrRestarts: the number of times the generator is reset to its initial state
+        generator: the pre trained generator to use
+        discriminator: the pre trained discriminator to use
+        dataLikelihood: the data likelihood to use
+        epochs: the nulber of epochs for which to retrain the generator
+        image_Size: the number of pixels in the images allong one axis
+        hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
+        NoiseLength: the length of the noisevector used as input for the generator
+        saveDir: directory to store the generator in its final state
+        plotAtEpoch: lost of epochs at which to plot the reconstructions(for one noisevector)
+        bootstrapDir additional directory to create during bootstraping iterations
+    Returns:
+        mean: the reconstructed image (mean over noisevectors)
+        variance: the varience (std^2) due to a different sampling
+    """
+    def bootstrappingReconstr(self,iterations,nrRestarts,epochs,hyperParam, plotvar = False,plotAtEpoch = [],loud = False):
+        mean = np.zeros([self.imageSize,self.imageSize])
+        variance = np.zeros([self.imageSize,self.imageSize])
+        cube = np.array([None])
+        for I in range(iterations):
+            print(epochs)
+            m,v = self.AveragingImageReconstruction(        nrRestarts,
+                                                            epochs,
+                                                            hyperParam ,
+                                                            plotvar,
+                                                            plotAtEpoch,
+                                                            bootstrapping = True,
+                                                            bootstrapDir = 'altered_Dataset_'+str(I),
+                                                            loud = loud
+                                                            )
+            mean, variance = updateMeanAndVariance(I+1,mean,variance,m)
+            image= np.array([mean],dtype = np.float64)
+            if cube.all() == None:
+                cube = image
+            else:
+                cube = np.concatenate((cube,image),axis =0)
+        final_dir = os.path.join(os.getcwd(), 'meanImage')
+        if not os.path.isdir(final_dir):
+            os.makedirs(final_dir)
+        plotMeanAndSTD(mean,variance,self.imageSize,self.pixelSize,final_dir,plotVar = True)
+        median = np.median(cube,axis = 0)
+        final_median_dir = os.path.join(os.getcwd(),'medianImage')
+        if not os.path.isdir(final_median_dir):
+            os.makedirs(final_median_dir)
+        plotMeanAndSTD(median,variance,self.imageSize,self.pixelSize,final_median_dir,plotVar = True)
+        print('!!!!!!!!!!!!!!')
+        print(cube.shape)
+        print('!!!!!!!!!!!!!!')
+        chi2,v2,cp,fprior = self.likelihoodVal(mean)
+        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fpriot)]
+        toFits(mean, self.imageSize, self.pixelSize,'mean',comment = commnt)
+        chi2,v2,cp,fprior = self.likelihoodVal(median)
+        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fpriot)]
+        toFits(median, self.imageSize, self.pixelSize, 'median',comment = commnt)
+        toFits(variance, self.imageSize, self.pixelSize, 'variace',comment = ['std^2'])
+        toFits(cube, self.imageSize, self.pixelSize, 'Bootstrapping_ImageCube',cube.shape[0],ctype3 ='random baseinline selection number')
+        return mean, variance
+
+
+
+    """
+    AveragingImageReconstruction
+
+    parameters:
+        nrRestarts: the number of times the generator is reset to its initial state
+        generator: the pre trained generator to use
+        discriminator: the pre trained discriminator to use
+        dataLikelihood: the data likelihood to use
+        epochs: the nulber of epochs for which to retrain the generator
+        image_Size: the number of pixels in the images allong one axis
+        hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
+        NoiseLength: the length of the noisevector used as input for the generator
+        saveDir: directory to store the generator in its final state
+        plotAtEpoch: lost of epochs at which to plot the reconstructions(for one noisevector)
+        bootstrapDir additional directory to create during bootstraping iterations
+    Returns:
+        mean: the reconstructed image (mean over noisevectors)
+        variance: the varience with respect to the input noise vector
+    """
+    def AveragingImageReconstruction(self,nrRestarts=100,epochs = 250,hyperParam = 2, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = '',loud =False):
+        Generator = self.generator
+        discriminator = self.discriminator
+        opt = self.opt
+        pixelSize = self.pixelSize
+        image_Size = self.imageSize
+        NoiseLength = self.NoiseLength
+        mean = np.zeros([image_Size,image_Size])
+        variance = np.zeros([image_Size,image_Size])
+        cube = np.array([None])
+        if self.useSparco == True:
+            dataLikelihood = dataLikeloss_FixedSparco(self.DataDir,
+                                            self.filename,
+                                            self.imageSize,
+                                            self.x,
+                                            self.y,
+                                            self.UDflux,
+                                            self.PointFlux,
+                                            self.denv,
+                                            self.dsec,
+                                            self.UDdiameter,
+                                            self.pixelSize,
+                                            forTraining = True,
+                                            V2Artificial = self.V2Artificial,
+                                            CPArtificial = self.CPArtificial,
+                                            bootstrap = bootstrapping
+                                            )
+        else:
+            dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
+                                    forTraining = True,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial)
+        for r in range(nrRestarts):
+            GeneratorCopy = tf.keras.models.clone_model(Generator)
+            GeneratorCopy.set_weights(Generator.get_weights())
+            Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
+            print(os.getcwd())
+            if not os.path.isdir(Iter_dir) and loud ==True:
+                os.makedirs(Iter_dir)
+            m, diskyLoss, fitLoss = SingleRun(GeneratorCopy,
+                                            discriminator,
+                                            opt,
+                                            dataLikelihood,
+                                            pixelSize,
+                                            epochs,
+                                            image_Size,
+                                            hyperParam,
+                                            NoiseLength,
+                                            saveDir  = Iter_dir,
+                                            plotAtEpoch= plotAtEpoch,
+                                            loud = loud
+                                            )
+            mean, variance = updateMeanAndVariance(r+1,mean,variance,m)
+            image= np.array([mean],dtype = np.float64)
+            if cube.all() == None:
+                cube = image
+            else:
+                cube = np.concatenate((cube,image),axis =0)
+            del GeneratorCopy
+        median = np.median(cube,axis = 0)
+        final_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,'meanImage'))
+        if not os.path.isdir(final_dir):
+            os.makedirs(final_dir)
+        plotMeanAndSTD(mean,variance,image_Size,pixelSize,final_dir,plotVar = plotvar)
+        #If median is prefered
+        #final_median_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,'medianImage'))
+        #if not os.path.isdir(final_median_dir):
+        #    os.makedirs(final_median_dir)
+        #plotMeanAndSTD(median,variance,image_Size,pixelSize,final_median_dir,plotVar = plotvar)
+        print(cube.shape)
+        if bootstrapDir != '':
+            chi2,v2,cp,fprior = self.likelihoodVal(mean,bootstrapDir)
+            commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            toFits(mean, image_Size, pixelSize, bootstrapDir+'/'+'mean',comment = commnt)
+            #If median is prefered
+            #chi2,v2,cp,fprior = self.likelihoodVal(median,bootstrapDir)
+            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            #toFits(median, image_Size, pixelSize, bootstrapDir+'/'+'median',comment = commnt)
+            toFits(cube, image_Size, pixelSize, bootstrapDir+'/'+'ImageCube',depth =cube.shape[0],ctype3 ='Noise vector number')
+        else:
+            chi2,v2,cp,fprior = self.likelihoodVal(mean)
+            commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            toFits(mean, image_Size, pixelSize, os.path.join(os.getcwd(),'mean'),comment = commnt)
+            #If median is prefered
+            #chi2,v2,cp,fprior = self.likelihoodVal(median)
+            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            #toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),comment = commnt)
+            toFits(cube, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cube.shape[0],ctype3 ='Noise vector number')
+        return mean
+
+    def runGrid(self,nrRestarts = [],epochs=[],mus = [],**kwargs):
+        pixelSizes = [self.pixelSize]
+        pixelSizesold = self.pixelSize
+        if self.useSparco == True:
+            xs = [self.x]
+            ys = [self.y]
+            UDfluxs = [self.UDflux]
+            PointFluxs = [self.PointFlux]
+            denvs = [self.denv]
+            dsecs=[self.dsec]
+            UDdiameters=[self.UDdiameter]
+            #store the old values
+            xold = self.x
+            yold = self.y
+            UDfluxold = self.UDflux
+            PointFluxold = self.PointFlux
+            denvold = self.denv
+            dsecold=self.dsec
+            UDdiameterold=self.UDdiameter
+        else:
+             xs = []
+             ys = []
+             UDfluxs = []
+             PointFluxs = []
+             denvs = []
+             dsecs=[]
+             UDdiameters=[]
+
+        for key, values in kwargs.items():
+            print(key)
+            if key == 'pixelSize':
+                pixelSizes =values
+            elif key == 'x':
+                xs = values
+            elif key == 'y':
+                ys = values
+            elif key == 'UDflux':
+                UDfluxs = values
+            elif key == 'PointFlux':
+                PointFluxs = values
+            elif key == 'denv':
+                denvs = values
+            elif key == 'dsec':
+                dsecs = values
+            elif key == 'UDdiameter':
+                UDdiameters = values
+            else: raise KeyError('Invalid keywords argument')
+        for nrRestart in nrRestarts:
+            for epoch in epochs:
+                for pixelSize in pixelSizes:
+                    self.pixelsize = pixelSize
+                    for mu in mus:
+                        for x in xs:
+                            self.x = x
+                            for y in ys:
+                                self.x = x
+                                for UDflux in UDfluxs:
+                                    self.UDflux = UDflux
+                                    for PointFlux in PointFluxs:
+                                        self.PointFlux = PointFlux
+                                        for denv in denvs:
+                                            self.denv = denv
+                                            for dsec in dsecs:
+                                                self.dsec = dsec
+                                                for UDdiameter in UDdiameters:
+                                                    self.UDdiameter = UDdiameter
+                                                    dir = '[_'
+                                                    if len(nrRestarts)>1:
+                                                        dir =dir+str(nrRestarts)+'_'
+                                                    if len(mus)>1:
+                                                        dir =dir+str(mu)+'_'
+                                                    if len(epochs)>1:
+                                                        dir = dir + str(epoch) +'_'
+                                                    for key, values in kwargs.items():
+                                                        if key == 'pixelSize':
+                                                            pixelSizes =values
+                                                        elif key == 'x':
+                                                            dir = dir + str(x) +'_'
+                                                        elif key == 'y':
+                                                            dir = dir + str(y) +'_'
+                                                        elif key == 'UDflux':
+                                                            dir = dir + str(UDflux) +'_'
+                                                        elif key == 'PointFlux':
+                                                            dir = dir + str(PointFlux) +'_'
+                                                        elif key == 'denv':
+                                                            dir = dir + str(denv) +'_'
+                                                        elif key == 'dsec':
+                                                            dir = dir + str(dsec) +'_'
+                                                        elif key == 'UDdiameter':
+                                                            dir = dir + str(UDdiameter) +'_'
+                                                        elif key == 'nrRestart':
+                                                            dir = dir + str(nrRestart) +'_'
+                                                    dir = dir + ']'
+                                                    mean = self.AveragingImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
+        self.setSparco(xold,yold,UDfluxold,PointFluxold,denvold,dsecold,UDdiameterold)
+        pixelSizesold = self.pixelSize
+
+
+    """
+    likelihoodVal
+
+    parameters:
+        self: an instance of framework
+        mean: the image for which to compute the chi square terms and regularization term
+        bootstrapDir: directory s
+    Returns:
+        lossValue: the total "reduced" chi2
+        V2loss: the "reduced" chi2 for the squared visibilities
+        CPloss: the "reduced" chi2 for the closure phases
+        fprior: the value of the regularization term fprior
+    effect: prints a comparison between the observed and reconstructed V2 and CP
+    """
+    def likelihoodVal(self,mean,bootstrapDir = None):
+        imgNP = (mean*2)-1
+        img = tf.constant(imgNP)
+        img = tf.reshape(img,[1,self.imageSize,self.imageSize,1])
+        if self.useSparco == True:
+            dataLikelihood = dataLikeloss_FixedSparco(self.DataDir,
+                                        self.filename,
+                                        self.imageSize,
+                                        self.x,
+                                        self.y,
+                                        self.UDflux,
+                                        self.PointFlux,
+                                        self.denv,
+                                        self.dsec,
+                                        self.UDdiameter,
+                                        self.pixelSize,
+                                        forTraining = False,
+                                        V2Artificial = self.V2Artificial,
+                                        CPArtificial = self.CPArtificial,
+                                        bootstrapDir = bootstrapDir
+                                        )
+        else:
+            dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
+                                forTraining = False,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial)
+        lossValue, V2loss , CPloss = dataLikelihood(None,img)
+
+        score = self.discriminator.predict(imgNP.reshape(1,self.imageSize,self.imageSize,1))
+        fprior = -np.log(score)
+        return lossValue, V2loss , CPloss, fprior
