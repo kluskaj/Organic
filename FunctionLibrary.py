@@ -22,6 +22,7 @@ import ReadOIFITS as oi
 import scipy.special as sp
 from matplotlib import gridspec
 import matplotlib.colors as colors
+import gc
 ################################################################################
 ############################### for GAN training ####################################
 ################################################################################
@@ -589,6 +590,7 @@ bootstrapDir =None
             plt.savefig(os.path.join(os.getcwd(),'cpComparisonNoColor.png'))
         else:
             plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparisonNoColor.png'))
+        plt.close()
     def compTotalCompVis(ftImages,ufunc,vfunc, wavelfunc):
         #to compute the radial coordinate in the uv plane so compute the ft of the primary, which is a uniform disk, so the ft is....
         radii = np.pi*UDdiameter*np.sqrt(ufunc**2 + vfunc**2)
@@ -710,7 +712,119 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
         return interpValues
 
+    def plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr):
+        #v2 with residual comparison
+        plt.figure(figsize=(3.5, 6))
+        maskv2 = V2err < 0.5
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
+        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=30,label = 'image',c = np.real(wavelV2.numpy())[maskv2],cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(absB,V2observed[maskv2],marker='*',s=30,label = 'observed',cmap ='rainbow',c = np.real(wavelV2.numpy())[maskv2],alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='k')
+        plt.ylim(0,1)
+        plt.ylabel(r'$V^2$')
+        plt.legend()
 
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = np.real(wavelV2)[maskv2],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors ='k',linewidth=0.15)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.xlabel(r'$\mid B\mid (M\lambda)$')
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(),'V2comparison.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparison.png'))
+
+        #v2 with residual comparison, no colors indicating wavelength
+        plt.figure(figsize=(3.5, 6))
+        maskv2 = V2err < 0.5
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
+        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=40,label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(absB,V2observed[maskv2],marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='r')
+        plt.ylim(0,1)
+        plt.ylabel(r'$V^2$')
+        plt.legend()
+
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.xlabel(r'$\mid B\mid (M\lambda)$')
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(),'V2comparisonNoColor.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparisonNoColor.png'))
+
+        #plots the uv coverage
+        plt.figure()
+        plt.scatter(u/(10**6),v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+        plt.scatter(-u/(10**6),-v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+        plt.xlabel(r'$ u (M\lambda)$')
+        plt.ylabel(r'$ v (M\lambda)$')
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(), 'uvCoverage.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/uvCoverage.png'))
+
+
+        #cp with residual comparison
+        plt.figure(figsize=(3.5, 6))
+        maskcp = CPerr < 10.0
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
+        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',cmap ='rainbow',c = np.real(wavelCP.numpy())[maskcp],alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='k')
+        plt.legend()
+        plt.ylabel(r'closure phase(radian)',fontsize =12)
+
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = np.real(wavelCP)[maskcp],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors=colors.to_rgba('k', 0.1), linewidth=0.15)
+        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
+        #c[0].set_color(color)
+
+        plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(), 'cpComparison.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparison.png'))
+
+        #cp with residual comparison without color indicating wavelength
+        plt.figure(figsize=(3.5, 6))
+        maskcp = CPerr < 10.0
+        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+        ax1=plt.subplot(gs[0]) # sharex=True)
+        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
+        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='r')
+        plt.legend()
+        plt.ylabel(r'closure phase(radian)',fontsize =12)
+
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.subplot(gs[1], sharex=ax1)
+        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
+        #c[0].set_color(color)
+
+        plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
+        plt.ylabel(r'residuals',fontsize =12)
+        plt.tight_layout()
+        if bootstrapDir == None:
+            plt.savefig(os.path.join(os.getcwd(),'cpComparisonNoColor.png'))
+        else:
+            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparisonNoColor.png'))
+        plt.close()
 
     def internalloss(y_true,y_pred):
         #compute the fourier transform of the images
@@ -744,7 +858,9 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
         if forTraining == True:
             return  tf.cast(lossValue,tf.float32)
-        else: return lossValue, V2loss , CPloss
+        else:
+            plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr)
+            return lossValue, V2loss , CPloss
 
     return internalloss
 
@@ -1204,8 +1320,6 @@ def SingleRun(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 
 
 
 
-
-
 def toFits(Image,imageSize,pixelSize,Name,comment= [''],depth = None,ctype3 ='' ):
     header = fits.Header()
     header['SIMPLE'] = 'T'
@@ -1304,7 +1418,7 @@ class framework:
                                                             loud = loud
                                                             )
             mean, variance = updateMeanAndVariance(I+1,mean,variance,m)
-            image= np.array([mean],dtype = np.float64)
+            image= np.array([m],dtype = np.float64)
             if cube.all() == None:
                 cube = image
             else:
@@ -1325,7 +1439,7 @@ class framework:
         commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
         toFits(median, self.imageSize, self.pixelSize, 'median',comment = commnt)
         toFits(variance, self.imageSize, self.pixelSize, 'variace',comment = ['std^2'])
-        toFits(cube, self.imageSize, self.pixelSize, 'Bootstrapping_ImageCube',cube.shape[0],ctype3 ='random baseinline selection number')
+        toFits(cube, self.imageSize, self.pixelSize, 'Bootstrapping_ImageCube',depth =cube.shape[0],ctype3 ='random baseinline selection number')
         return mean, variance
 
 
@@ -1358,7 +1472,7 @@ class framework:
         NoiseLength = self.NoiseLength
         mean = np.zeros([image_Size,image_Size])
         variance = np.zeros([image_Size,image_Size])
-        cube = np.array([None])
+        cubeA = np.array([None])
         if self.useSparco == True:
             dataLikelihood = dataLikeloss_FixedSparco(self.DataDir,
                                             self.filename,
@@ -1379,11 +1493,10 @@ class framework:
         else:
             dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
                                     forTraining = True,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial)
+        GeneratorCopy = tf.keras.models.clone_model(Generator)
         for r in range(nrRestarts):
-            GeneratorCopy = tf.keras.models.clone_model(Generator)
             GeneratorCopy.set_weights(Generator.get_weights())
             Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
-            print(os.getcwd())
             if not os.path.isdir(Iter_dir) and loud ==True:
                 os.makedirs(Iter_dir)
             m, diskyLoss, fitLoss = SingleRun(GeneratorCopy,
@@ -1400,13 +1513,17 @@ class framework:
                                             loud = loud
                                             )
             mean, variance = updateMeanAndVariance(r+1,mean,variance,m)
-            image= np.array([mean],dtype = np.float64)
-            if cube.all() == None:
-                cube = image
+            image= np.array([m],dtype = np.float64)
+            if cubeA.all() == None:
+                cubeA = image
             else:
-                cube = np.concatenate((cube,image),axis =0)
-            del GeneratorCopy
-        median = np.median(cube,axis = 0)
+                cubeA = np.concatenate((cubeA,image),axis =0)
+            #del GeneratorCopy
+            K.clear_session()
+            tf.compat.v1.reset_default_graph()
+            gc.collect()
+            plt.close()
+        median = np.median(cubeA,axis = 0)
         final_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,'meanImage'))
         if not os.path.isdir(final_dir):
             os.makedirs(final_dir)
@@ -1416,7 +1533,7 @@ class framework:
         #if not os.path.isdir(final_median_dir):
         #    os.makedirs(final_median_dir)
         #plotMeanAndSTD(median,variance,image_Size,pixelSize,final_median_dir,plotVar = plotvar)
-        print(cube.shape)
+        print(cubeA.shape)
         if bootstrapDir != '':
             chi2,v2,cp,fprior = self.likelihoodVal(mean,bootstrapDir)
             commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
@@ -1425,7 +1542,7 @@ class framework:
             #chi2,v2,cp,fprior = self.likelihoodVal(median,bootstrapDir)
             #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
             #toFits(median, image_Size, pixelSize, bootstrapDir+'/'+'median',comment = commnt)
-            toFits(cube, image_Size, pixelSize, bootstrapDir+'/'+'ImageCube',depth =cube.shape[0],ctype3 ='Noise vector number')
+            toFits(cubeA, image_Size, pixelSize, bootstrapDir+'/'+'ImageCube',depth =cubeA.shape[0],ctype3 ='Noise vector number')
         else:
             chi2,v2,cp,fprior = self.likelihoodVal(mean)
             commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
@@ -1434,7 +1551,7 @@ class framework:
             #chi2,v2,cp,fprior = self.likelihoodVal(median)
             #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
             #toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),comment = commnt)
-            toFits(cube, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cube.shape[0],ctype3 ='Noise vector number')
+            toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
         return mean
 
     def runGrid(self,nrRestarts = [],epochs=[],mus = [],**kwargs):
@@ -1471,28 +1588,35 @@ class framework:
                 pixelSizes =values
             elif key == 'x':
                 xs = values
+                self.useSparco = True
             elif key == 'y':
                 ys = values
+                self.useSparco = True
             elif key == 'UDflux':
                 UDfluxs = values
+                self.useSparco = True
             elif key == 'PointFlux':
                 PointFluxs = values
+                self.useSparco = True
             elif key == 'denv':
                 denvs = values
+                self.useSparco = True
             elif key == 'dsec':
                 dsecs = values
+                self.useSparco = True
             elif key == 'UDdiameter':
                 UDdiameters = values
+                self.useSparco = True
             else: raise KeyError('Invalid keywords argument')
         for nrRestart in nrRestarts:
             for epoch in epochs:
                 for pixelSize in pixelSizes:
-                    self.pixelsize = pixelSize
+                    self.pixelSize = pixelSize
                     for mu in mus:
                         for x in xs:
                             self.x = x
                             for y in ys:
-                                self.x = x
+                                self.y = x
                                 for UDflux in UDfluxs:
                                     self.UDflux = UDflux
                                     for PointFlux in PointFluxs:
