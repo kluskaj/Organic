@@ -1616,7 +1616,7 @@ class framework:
                         for x in xs:
                             self.x = x
                             for y in ys:
-                                self.y = x
+                                self.y = y
                                 for UDflux in UDfluxs:
                                     self.UDflux = UDflux
                                     for PointFlux in PointFluxs:
