@@ -223,7 +223,7 @@ saveModel
 parameters:
     Savedir: directory to save the generated models
     Modelname: name to be used for storing the networks of this run
-    GAN: the trained combined generator and discriminator network, as created by create_gan, to be stored
+    GAN: the trained combined generator and discriminator network, as ateated by create_gan, to be stored
     generator: the trained generator to be stored
     discr: the trained discriminator to be stored
 effect:
@@ -871,13 +871,13 @@ parameters:
     y_true: the labels for used for training
     y_pred: the predictions made by the neural network
 returns:
-    binary binary_crossentropy loss function  with an added quadratic term in order to prevent over optimization
+    binary binary_crossentropy loss function
 
 """
 def adjustedCrossEntropy(y_true,y_pred):
     #mask = K.cast(K.less(0.95,K.mean(y_pred)), K.floatx())
     return K.binary_crossentropy(y_true, y_pred, from_logits=False) #+ mask*(80*(K.mean(y_pred)-0.95))**2
-
+    #return tf.keras.losses.MeanSquaredError()(y_true, y_pred)
 
 """
 createNetwork
@@ -890,14 +890,14 @@ returns:
     these outputs are optimized using the dataLikelihood cost of choice and the adjusted binary_crossentropy as cost function.
 
 """
-def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength):
+def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength,opt):
     noise_input = Input(shape = (NoiseLength,))
     x = generator(noise_input)
     gan_output= discriminator(x)
     gan= Model(inputs=noise_input, outputs=[gan_output,x])
     #losses are reversed compared to paper!
     losses = [adjustedCrossEntropy ,dataLikelihood]
-    gan.compile(loss=losses,optimizer= Adam(learning_rate=0.0002,beta_1=0.91,beta_2=0.999, amsgrad=False),loss_weights=[hyperParam,1])
+    gan.compile(loss=losses,optimizer= opt,loss_weights=[hyperParam,1])
     discriminator.trainable = False
     return gan
 
@@ -1202,13 +1202,13 @@ Returns:
 """
 def reconsructionOLDway(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000,saveDir  = ''):
     #create the network with two cost terms
-    discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
+    #discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
     discriminator.trainable =False
     #for layer in discriminator.layers:
     #    if layer.__class__.__name__ == 'SpatialDropout2D':
     #        layer.trainable = True
     Generator.trainable = True
-    fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength)
+    fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength,opt)
     # initialize empty arrays to store the cost evolution
     diskyLoss = np.zeros(epochs)
     fitLoss = np.zeros(epochs)
@@ -1252,106 +1252,6 @@ def reconsructionOLDway(Generator, discriminator,opt,dataLikelihood , pixelSize 
     return mean, variance, diskyLoss, fitLoss
 
 
-"""
-reconsruction
-
-parameters:
-        generator: the pre trained generator to use
-        discriminator: the pre trained discriminator to use
-        dataLikelihood: the data likelihood to use
-        epochs: the nulber of epochs for which to retrain the generator
-        image_Size: the number of pixels in the images allong one axis
-        hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
-        NoiseLength: the length of the noisevector used as input for the generator
-        beginepoch: the epoch at which the first contribution to the mean image is made
-        RandomWalkStepSize: size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*)
-        alterationInterval: number of epochs between a an additional contribution to the mean and variance image
-    plotinterval: the epoch interval between changes to the Noisevector and contributions to the
-    saveDir: directory to store the generator in its final state
-Returns:
-    the reconstructed image (mean over noisevectors)
-
-
-
-"""
-def SingleRun(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 250,image_Size = 128,hyperParam = 2,NoiseLength = 100,saveDir  = '',plotAtEpoch = [],loud = False):
-    #create the network with two cost terms
-    discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
-    discriminator.trainable =False
-    #for layer in discriminator.layers:
-    #    if layer.__class__.__name__ == 'SpatialDropout2D':
-    #        layer.trainable = True
-    Generator.trainable = True
-    fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength)
-    # initialize empty arrays to store the cost evolution
-    diskyLoss = np.zeros(epochs)
-    fitLoss = np.zeros(epochs)
-    # make an array with the epoch of the reconstruction
-    epoch = np.linspace(1,epochs,epochs)
-    #initialize the mean and variance images
-    mean = np.zeros([image_Size,image_Size])
-    variance = np.zeros([image_Size,image_Size])
-    # start tracking the amount of contributions made to the mean and variance image
-    i = 1
-    # initialize a initial random noise vector
-    theOneNoiseVector = np.random.normal(0,1,NoiseLength)
-    y_gen =[np.ones(1),np.ones(1)]
-    for e in range(1, epochs+1 ):
-        #generate  random noise as an input  to  initialize the  generator
-        noise= np.array([theOneNoiseVector])
-        hist= fullNet.train_on_batch(noise, y_gen)
-        diskyLoss[e-1] += hyperParam*(hist[1])
-        fitLoss[e-1] += (hist[2])
-        # alter the noise vector each alterationInterval, if the first contribution to the mean and var has been made
-        if e == epochs:
-            image = Generator.predict(np.array([theOneNoiseVector for i in range(2)]))[0]
-            mean = np.squeeze((image+1)/2)
-        #plot the image at the specified epochs
-        if e in plotAtEpoch:
-            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size,pixelSize,saveDir)
-            plt.close()
-    #plot the loss evolution
-    if loud == True:
-        plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
-        #plot and store the mean and variance image
-        plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir)
-
-    return mean, diskyLoss, fitLoss
-
-
-
-def toFits(Image,imageSize,pixelSize,Name,comment= [''],depth = None,ctype3 ='' ):
-    header = fits.Header()
-    header['SIMPLE'] = 'T'
-    header['BITPIX']  = -64
-    header['NAXIS'] = 2
-    header['NAXIS1'] = imageSize
-    header['NAXIS2']  =  imageSize
-    if depth != None:
-        header['NAXIS3']  =  depth
-    header['EXTEND']  = 'T'
-    header['CTYPE1']  = 'X [arcsec]'
-    header['CTYPE2']  = 'Y [arcsec]'
-    header['CRVAL1']  = (0.0,'Coordinate system value at reference pixel')
-    header['CRVAL2']  = (0.0,'Coordinate system value at reference pixel')
-    header['CRPIX1']  =  imageSize/2
-    header['CRPIX2']  =  imageSize/2
-    header['CTYPE1']  = ('milliarcsecond', 'RA in mas')
-    header['CTYPE2']  = ('milliarcsecond', 'DEC in mas')
-    header['CDELT1'] = pixelSize
-    header['CDELT2'] = pixelSize
-    header['CRVAL1'] =0
-    header['CRVAL2'] =0
-    if depth != None:
-        header['CDELT3']  =  1.
-        header['CTYPE3']  = ctype3
-    for c in comment:
-        header['COMMENT'] = c
-    prihdu = fits.PrimaryHDU(Image,header=header)
-    prihdu.writeto(Name+'.fits',overwrite=True)
-
-
-
 class framework:
     def __init__(self, DataDir,filename,imageSize,pixelSize,generator,discriminator,opt,NoiseLength = 100):
         self.DataDir = DataDir
@@ -1366,6 +1266,7 @@ class framework:
         self.V2Artificial = None
         self.CPArtificial = None
         self.useSparco= False
+        self.fullNet = None
     def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter):
         self.x =x
         self.y =y
@@ -1379,8 +1280,64 @@ class framework:
         self.V2Artificial = V2Artificial
         self.CPArtificial = CPArtificial
 
+    """
+    reconsruction
 
+    parameters:
+            generator: the pre trained generator to use
+            discriminator: the pre trained discriminator to use
+            dataLikelihood: the data likelihood to use
+            epochs: the nulber of epochs for which to retrain the generator
+            image_Size: the number of pixels in the images allong one axis
+            hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
+            NoiseLength: the length of the noisevector used as input for the generator
+            plotAtEpoch: at which to plot the image produced by the generator
+        saveDir: directory to store the generator in its final state
+    Returns:
+        the reconstructed image for a single noise vector
 
+    """
+    def SingleRun(self,Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 250,image_Size = 128,hyperParam = 2,NoiseLength = 100,saveDir  = '',plotAtEpoch = [],loud = False):
+        #create the network with two cost terms
+        discriminator.trainable =False
+        #for layer in discriminator.layers:
+        #    if layer.__class__.__name__ == 'SpatialDropout2D':
+        #        layer.trainable = True
+        Generator.trainable = True
+        if self.fullNet == None:
+            self.fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength,opt)
+
+        # initialize empty arrays to store the cost evolution
+        diskyLoss = np.zeros(epochs)
+        fitLoss = np.zeros(epochs)
+        # make an array with the epoch of the reconstruction
+        epoch = np.linspace(1,epochs,epochs)
+        #initialize the mean and variance images
+        mean = np.zeros([image_Size,image_Size])
+        variance = np.zeros([image_Size,image_Size])
+        # initialize a initial random noise vector
+        theOneNoiseVector = np.random.normal(0,1,NoiseLength)
+        y_gen =[np.ones(1),np.ones(1)]
+        noise= np.array([theOneNoiseVector])
+        for e in range(1, epochs+1 ):
+            #generate  random noise as an input  to  initialize the  generator
+            hist= self.fullNet.train_on_batch(noise, y_gen)
+            diskyLoss[e-1] += hyperParam*(hist[1])
+            fitLoss[e-1] += (hist[2])
+            # alter the noise vector each alterationInterval, if the first contribution to the mean and var has been made
+            if e == epochs:
+                image = self.fullNet.predict(np.array([theOneNoiseVector for i in range(2)]))[1][0]
+                mean = np.squeeze((image+1)/2)
+            #plot the image at the specified epochs
+            if e in plotAtEpoch:
+                plot_generated_images2(e, self.fullNet.get_layer(index=1),theOneNoiseVector,image_Size,pixelSize,saveDir)
+                plt.close()
+        #plot the loss evolution
+        if loud == True:
+            plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
+            #plot and store the mean and variance image
+            plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir)
+        return mean, diskyLoss, fitLoss
     """
     bootstrappingReconstr
 
@@ -1432,14 +1389,14 @@ class framework:
         if not os.path.isdir(final_median_dir):
             os.makedirs(final_median_dir)
         plotMeanAndSTD(median,variance,self.imageSize,self.pixelSize,final_median_dir,plotVar = True)
-        chi2,v2,cp,fprior = self.likelihoodVal(mean)
-        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-        toFits(mean, self.imageSize, self.pixelSize,'mean',comment = commnt)
-        chi2,v2,cp,fprior = self.likelihoodVal(median)
-        commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-        toFits(median, self.imageSize, self.pixelSize, 'median',comment = commnt)
-        toFits(variance, self.imageSize, self.pixelSize, 'variace',comment = ['std^2'])
-        toFits(cube, self.imageSize, self.pixelSize, 'Bootstrapping_ImageCube',depth =cube.shape[0],ctype3 ='random baseinline selection number')
+        #chi2,v2,cp,fprior = self.likelihoodVal(mean)
+        #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+        self.toFits(mean, self.imageSize, self.pixelSize,'mean',chi2s =self.likelihoodVal(mean))
+        #chi2,v2,cp,fprior = self.likelihoodVal(median)
+        #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+        self.toFits(median, self.imageSize, self.pixelSize, 'median',chi2s =self.likelihoodVal(median))
+        self.toFits(variance, self.imageSize, self.pixelSize, 'variace',comment = ['std^2'])
+        self.toFits(cube, self.imageSize, self.pixelSize, 'Bootstrapping_ImageCube',depth =cube.shape[0],ctype3 ='random baseinline selection number')
         return mean, variance
 
 
@@ -1463,7 +1420,7 @@ class framework:
         mean: the reconstructed image (mean over noisevectors)
         variance: the varience with respect to the input noise vector
     """
-    def AveragingImageReconstruction(self,nrRestarts=100,epochs = 250,hyperParam = 2, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = '',loud =False):
+    def AveragingImageReconstruction(self,nrRestarts=100,epochs = 250,hyperParam = 1, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = '',loud =False):
         Generator = self.generator
         discriminator = self.discriminator
         opt = self.opt
@@ -1494,12 +1451,16 @@ class framework:
             dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
                                     forTraining = True,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial)
         GeneratorCopy = tf.keras.models.clone_model(Generator)
+        GeneratorCopy.set_weights(Generator.get_weights())
         for r in range(nrRestarts):
-            GeneratorCopy.set_weights(Generator.get_weights())
+            #GeneratorCopy.set_weights(Generator.get_weights())
+            if self.fullNet != None:
+                self.fullNet.get_layer(index=1).set_weights(self.generator.get_weights())
+                self.fullNet.compile(loss=[adjustedCrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
             Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
             if not os.path.isdir(Iter_dir) and loud ==True:
                 os.makedirs(Iter_dir)
-            m, diskyLoss, fitLoss = SingleRun(GeneratorCopy,
+            m, diskyLoss, fitLoss = self.SingleRun(GeneratorCopy,
                                             discriminator,
                                             opt,
                                             dataLikelihood,
@@ -1535,25 +1496,39 @@ class framework:
         #plotMeanAndSTD(median,variance,image_Size,pixelSize,final_median_dir,plotVar = plotvar)
         print(cubeA.shape)
         if bootstrapDir != '':
-            chi2,v2,cp,fprior = self.likelihoodVal(mean,bootstrapDir)
-            commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-            toFits(mean, image_Size, pixelSize, bootstrapDir+'/'+'mean',comment = commnt)
+            #chi2,v2,cp,fprior = self.likelihoodVal(mean,bootstrapDir)
+            if bootstrapping == True:
+                commnt = ['these chi2s are computed with regards to the NOT modified dataset']
+            else:
+                commnt = ['']
+            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            self.toFits(mean, image_Size, pixelSize, bootstrapDir+'/'+'mean',comment = commnt,chi2s =self.likelihoodVal(mean,bootstrapDir))
             #If median is prefered
             #chi2,v2,cp,fprior = self.likelihoodVal(median,bootstrapDir)
             #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-            #toFits(median, image_Size, pixelSize, bootstrapDir+'/'+'median',comment = commnt)
-            toFits(cubeA, image_Size, pixelSize, bootstrapDir+'/'+'ImageCube',depth =cubeA.shape[0],ctype3 ='Noise vector number')
+            #self.toFits(median, image_Size, pixelSize, bootstrapDir+'/'+'median',comment = commnt)
+            self.toFits(cubeA, image_Size, pixelSize, bootstrapDir+'/'+'ImageCube',depth =cubeA.shape[0],ctype3 ='Noise vector number')
         else:
-            chi2,v2,cp,fprior = self.likelihoodVal(mean)
-            commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-            toFits(mean, image_Size, pixelSize, os.path.join(os.getcwd(),'mean'),comment = commnt)
+            #chi2,v2,cp,fprior = self.likelihoodVal(mean)
+            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            self.toFits(mean, image_Size, pixelSize, os.path.join(os.getcwd(),'mean'),chi2s =self.likelihoodVal(mean))
             #If median is prefered
             #chi2,v2,cp,fprior = self.likelihoodVal(median)
             #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-            #toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),comment = commnt)
-            toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
+            #self.toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),comment = commnt)
+            self.toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
         return mean
 
+    """
+    runGrid
+
+    parameters:
+        nrRestarts = []
+        epochs=[]
+        mus = []
+        **kwargs
+    effect: Runs AveragingImageReconstruction for all combinations of the given paramters
+    """
     def runGrid(self,nrRestarts = [],epochs=[],mus = [],**kwargs):
         pixelSizes = [self.pixelSize]
         pixelSizesold = self.pixelSize
@@ -1627,33 +1602,31 @@ class framework:
                                                 self.dsec = dsec
                                                 for UDdiameter in UDdiameters:
                                                     self.UDdiameter = UDdiameter
-                                                    dir = '[_'
+                                                    dir = ''
                                                     if len(nrRestarts)>1:
-                                                        dir =dir+str(nrRestart)+'_'
+                                                        dir =dir+'nR'+str(nrRestart)+'_'
                                                     if len(mus)>1:
-                                                        dir =dir+str(mu)+'_'
+                                                        dir =dir+ 'mu'+str(mu)+'_'
                                                     if len(epochs)>1:
-                                                        dir = dir + str(epoch) +'_'
+                                                        dir = dir + 'ep'+str(epoch) +'_'
                                                     for key, values in kwargs.items():
                                                         if key == 'pixelSize':
-                                                            dir = dir + str(pixelSize) +'_'
+                                                            dir = dir +'pS'+ str(pixelSize) +'_'
                                                         elif key == 'x':
-                                                            dir = dir + str(x) +'_'
+                                                            dir = dir +'x'+ str(x) +'_'
                                                         elif key == 'y':
-                                                            dir = dir + str(y) +'_'
+                                                            dir = dir +'y'+ str(y) +'_'
                                                         elif key == 'UDflux':
-                                                            dir = dir + str(UDflux) +'_'
+                                                            dir = dir + 'udF'+str(UDflux) +'_'
                                                         elif key == 'PointFlux':
-                                                            dir = dir + str(PointFlux) +'_'
+                                                            dir = dir +'pF'+ str(PointFlux) +'_'
                                                         elif key == 'denv':
-                                                            dir = dir + str(denv) +'_'
+                                                            dir = dir +'de'+ str(denv) +'_'
                                                         elif key == 'dsec':
-                                                            dir = dir + str(dsec) +'_'
+                                                            dir = dir +'ds'+ str(dsec) +'_'
                                                         elif key == 'UDdiameter':
-                                                            dir = dir + str(UDdiameter) +'_'
-                                                        elif key == 'nrRestart':
-                                                            dir = dir + str(nrRestart) +'_'
-                                                    dir = dir + ']'
+                                                            dir = dir +'udD'+ str(UDdiameter) +'_'
+                                                    dir = dir[:-1]
                                                     mean = self.AveragingImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
         self.setSparco(xold,yold,UDfluxold,PointFluxold,denvold,dsecold,UDdiameterold)
         pixelSizesold = self.pixelSize
@@ -1701,4 +1674,47 @@ class framework:
 
         score = self.discriminator.predict(imgNP.reshape(1,self.imageSize,self.imageSize,1))
         fprior = -np.log(score)
-        return lossValue, V2loss , CPloss, fprior
+        return lossValue.numpy(), V2loss.numpy()[0] , CPloss.numpy()[0], fprior[0][0]
+
+    def toFits(self, Image,imageSize,pixelSize,Name,comment= [''],chi2s =None, depth = None,ctype3 ='' ):
+        header = fits.Header()
+        header['SIMPLE'] = 'T'
+        header['BITPIX']  = -64
+        header['NAXIS'] = 2
+        header['NAXIS1'] = imageSize
+        header['NAXIS2']  =  imageSize
+        if depth != None:
+            header['NAXIS3']  =  depth
+        header['EXTEND']  = 'T'
+        header['CTYPE1']  = 'X [arcsec]'
+        header['CTYPE2']  = 'Y [arcsec]'
+        header['CRVAL1']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRVAL2']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRPIX1']  =  imageSize/2
+        header['CRPIX2']  =  imageSize/2
+        header['CTYPE1']  = ('milliarcsecond', 'RA in mas')
+        header['CTYPE2']  = ('milliarcsecond', 'DEC in mas')
+        header['CDELT1'] = pixelSize
+        header['CDELT2'] = pixelSize
+        header['CRVAL1'] =0
+        header['CRVAL2'] =0
+        if depth != None:
+            header['CDELT3']  =  1.
+            header['CTYPE3']  = ctype3
+        if self.useSparco == True:
+            header['x'] = (self.x,'x coordinate of the point source')
+            header['y']= (self.y ,'coordinate of the point source')
+            header['UDflux'] = self.UDflux ,'flux contribution of the uniform disk'
+            header['UDdiameter'] = (self.UDdiameter, 'diameter of the point source')
+            header['PointFlux'] = (self.PointFlux,'flux contribution of the point source')
+            header['denv'] = (self.denv,'spectral index of the environment')
+            header['dsec'] = (self.dsec,'spectral index of the point source')
+        if chi2s != None:
+            header['Totchi2'] = (chi2s[0],'the total reduced chi squared')
+            header['V2chi2'] = (chi2s[1],'the reduced chi squared for the squared visibilities')
+            header['CPchi2'] = (chi2s[2],'the reduced chi squared for the closure phases')
+            header['fprior'] = (chi2s[3],'the f_prior value')
+        for c in comment:
+            header['COMMENT'] = c
+        prihdu = fits.PrimaryHDU(Image,header=header)
+        prihdu.writeto(Name+'.fits',overwrite=True)
