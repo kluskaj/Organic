@@ -423,13 +423,13 @@ bootstrapDir =None
     nCP = len(CPerr)
     if bootstrap == True:
         CPselection = np.random.randint(0,nCP,nCP)
-        CPobserved = CPobserved[CPselection]
+        CPobserved,CPerr = CPobserved[CPselection],CPerr[CPselection]
     CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
     CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
         if bootstrap == True:
             V2Artificial = V2Artificial[V2selection]
-            CPerr = CPerr[CPselection]
+            CPArtificial = CPArtificial[CPselection]
         V2observed = tf.constant(V2Artificial)
         CPobserved = tf.constant(CPArtificial)
     u, u1, u2, u3 = dataObj['u']
@@ -672,14 +672,14 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     V2err = tf.constant(V2err)#conversion to tensor
     CPobserved, CPerr = dataObj['cp']
     if bootstrap == True:
-        CPselection = np.random.randint(0,nCP)
-        CPobserved = CPobserved[CPselection]
+        CPselection = np.random.randint(0,nCP,nCP)
+        CPobserved,CPerr = CPobserved[CPselection],CPerr[CPselection]
     CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
     CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
         if bootstrap == True:
             V2Artificial = V2Artificial[V2selection]
-            CPerr = CPerr[CPselection]
+            CPArtificial = CPArtificial[CPselection]
         V2observed = tf.constant(V2Artificial)
         CPobserved = tf.constant(CPArtificial)
     u, u1, u2, u3 = dataObj['u']
