@@ -1401,7 +1401,6 @@ class framework:
         return mean, variance
 
 
-
     """
     AveragingImageReconstruction
 
