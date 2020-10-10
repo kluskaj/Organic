@@ -138,17 +138,17 @@ def load_data(dir,imagesize):
     directories = glob.glob(dir)
     image = fits.getdata(directories[0], ext=0)
     img = Image.fromarray(image)
-    img = img.resize((imagesize,imagesize),Image.BILINEAR )
+    img = img.resize((imagesize,imagesize),Image.LANCZOS )
     images= np.array([np.array(img)[:, :, np.newaxis]])
-    images = images/np.max(images)
-    #images=(images-np.min(images))/(np.max(images)-np.min(images))
+    #images = images/np.max(images)
+    images=(images-np.min(images))/(np.max(images)-np.min(images))
     for i in range(1,len(directories)):
         image = fits.getdata(directories[i], ext=0)
         img = Image.fromarray(image)
-        img = img.resize((imagesize,imagesize),Image.BILINEAR )
+        img = img.resize((imagesize,imagesize),Image.LANCZOS )
         image=np.array([np.array(img)[:, :, np.newaxis]])
-        #image=(image-np.min(image))/(np.max(image)-np.min(image))
-        image = image/np.max(image)
+        image=(image-np.min(image))/(np.max(image)-np.min(image))
+        #image = image/np.max(image)
         images = np.concatenate([images, image]) #add the rescaled image to the array
     # normalize to [-1,+1]
     images = (images-0.5)*2
@@ -956,7 +956,7 @@ parameters:
     Image: the image used in the update in numpy format
 returns:
     updated mean and varience to take into account the given mean and varience images which are the I'th update
-    the images used here are normailzed between 0 and 1
+    the images are noramilzed to have a total flux equal to 1 before these are computed
 
 """
 def updateMeanAndVariance(I,mean,variance,image):
@@ -1376,6 +1376,7 @@ class framework:
                                                             )
             mean, variance = updateMeanAndVariance(I+1,mean,variance,m)
             image= np.array([m],dtype = np.float64)
+            image = image/np.sum(image)
             if cube.all() == None:
                 cube = image
             else:
@@ -1475,6 +1476,7 @@ class framework:
                                             )
             mean, variance = updateMeanAndVariance(r+1,mean,variance,m)
             image= np.array([m],dtype = np.float64)
+            image = image/np.sum(image)
             if cubeA.all() == None:
                 cubeA = image
             else:
@@ -1513,9 +1515,9 @@ class framework:
             #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
             self.toFits(mean, image_Size, pixelSize, os.path.join(os.getcwd(),'mean'),chi2s =self.likelihoodVal(mean))
             #If median is prefered
-            #chi2,v2,cp,fprior = self.likelihoodVal(median)
-            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-            #self.toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),comment = commnt)
+            chi2,v2,cp,fprior = self.likelihoodVal(median)
+            commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            self.toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),chi2s =self.likelihoodVal(median))
             self.toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
         return mean
 
@@ -1665,6 +1667,7 @@ class framework:
                                         forTraining = False,
                                         V2Artificial = self.V2Artificial,
                                         CPArtificial = self.CPArtificial,
+                                        bootstrap = False,
                                         bootstrapDir = bootstrapDir
                                         )
         else:
