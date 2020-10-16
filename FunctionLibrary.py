@@ -28,37 +28,7 @@ import gc
 ################################################################################
 
 
-#ImageDataGenerator: Keras object used to preprocces the input images
-#see: https://keras.io/api/preprocessing/image/ for more information
-def createDataGen():
-    return ImageDataGenerator(
-        featurewise_center=False,  # set input mean to 0 over the dataset
-        samplewise_center=False,  # set each sample mean to 0
-        featurewise_std_normalization=False,  # divide inputs by std of the dataset
-        samplewise_std_normalization=False,  # divide each input by its std
-        zca_whitening=False,  # apply ZCA whitening
-        zca_epsilon=1e-06,  # epsilon for ZCA whitening
-        rotation_range=180,  # randomly rotate images in the range (degrees, 0 to 180)
-        # randomly shift images horizontally (fraction of total width)
-        width_shift_range=0,
-        # randomly shift images vertically (fraction of total height)
-        height_shift_range=0,
-        shear_range=0.,  # set range for random shear
-        zoom_range=[1.3,1.7],  # set range for random zoom
-        channel_shift_range=0.,  # set range for random channel shifts
-        # set mode for filling points outside the input boundaries
-        fill_mode='nearest',
-        cval=-1.,  # value used for fill_mode = "constant"
-        horizontal_flip=False,  # randomly flip images
-        vertical_flip=False,  # randomly flip images
-        # set rescaling factor (applied before any other transformation)
-        rescale=None,
-        # set function that will be applied on each input
-        preprocessing_function=None,
-        # image data format, either "channels_first" or "channels_last"
-        data_format=None,
-        # fraction of images reserved for validation (strictly between 0 and 1)
-        validation_split=0.0)
+
 
 
 
@@ -79,7 +49,7 @@ effect:
 
 """
 def plotGanEvolution(epoch,discrFakeLoss=[],discrRealLoss=[],
-genLoss=[],discrFakeAccuracy=[],discrRealAccuracy= [],genAccuracy= []):
+genLoss=[],discrFakeAccuracy=[],genAccuracy= [], plus=''):
     fig1 = plt.figure()
     color=iter(cm.rainbow(np.linspace(0,1,5)))
     c=next(color)
@@ -91,17 +61,15 @@ genLoss=[],discrFakeAccuracy=[],discrRealAccuracy= [],genAccuracy= []):
     plt.legend()
     plt.ylabel('loss')
     plt.xlabel('epoch')
-    plt.savefig('Loss evolution%d.png')
+    plt.savefig(plus+'Loss evolution.png')
     fig2 = plt.figure()
-    plt.plot(epoch,discrFakeAccuracy,label = 'discriminator fake data accuracy',c = c)
-    c=next(color)
-    plt.plot(epoch,discrRealAccuracy,label = 'discriminator real data accuracy',c = c)
+    plt.plot(epoch,discrFakeAccuracy,label = 'discriminator data accuracy',c = c)
     c=next(color)
     plt.plot(epoch,genAccuracy,label = 'generator data accuracy',c = c)
     plt.legend()
     plt.ylabel('loss')
     plt.xlabel('epoch')
-    plt.savefig('Accuracy evolution.png')
+    plt.savefig(plus+'Accuracy evolution.png')
     plt.close()
 
 
@@ -138,17 +106,17 @@ def load_data(dir,imagesize):
     directories = glob.glob(dir)
     image = fits.getdata(directories[0], ext=0)
     img = Image.fromarray(image)
-    img = img.resize((imagesize,imagesize),Image.LANCZOS )
+    img = img.resize((imagesize,imagesize),Image.BILINEAR )
     images= np.array([np.array(img)[:, :, np.newaxis]])
-    #images = images/np.max(images)
-    images=(images-np.min(images))/(np.max(images)-np.min(images))
+    images = images/np.max(images)
+    #images=(images-np.min(images))/(np.max(images)-np.min(images))
     for i in range(1,len(directories)):
         image = fits.getdata(directories[i], ext=0)
         img = Image.fromarray(image)
-        img = img.resize((imagesize,imagesize),Image.LANCZOS )
+        img = img.resize((imagesize,imagesize),Image.BILINEAR )
         image=np.array([np.array(img)[:, :, np.newaxis]])
-        image=(image-np.min(image))/(np.max(image)-np.min(image))
-        #image = image/np.max(image)
+        #image=(image-np.min(image))/(np.max(image)-np.min(image))
+        image = image/np.max(image)
         images = np.concatenate([images, image]) #add the rescaled image to the array
     # normalize to [-1,+1]
     images = (images-0.5)*2
@@ -276,14 +244,17 @@ effect:
 
 """
 
-def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, batch_size=128,OverTrainDiscr=1,saveDir=None, PlotEpochs = 5,Use1sidedLabelSmooth = True, saveEpochs = []):
+def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, batch_size=128,OverTrainDiscr=1,saveDir=None, PlotEpochs = 5,Use1sidedLabelSmooth = True, saveEpochs = [],loadFromCube = False, datagen = ImageDataGenerator()):
     #Loading the data
     #global generator
     generator = gen
     #global discriminator
     discriminator = discr#modelCompiler(discr,optim,metr=["accuracy"])
     #discriminator.compile(loss='binary_crossentropy', optimizer=optim,metrics=["accuracy"])
-    X_train = load_data_fromCube(dir,image_size)
+    if loadFromCube == True:
+        X_train = load_data_fromCube(dir,image_size)
+    else:
+        X_train = load_data(dir,image_size)
     batch_count = int(np.ceil(X_train.shape[0] / batch_size))
     # Creating GAN
     gan = create_gan(discriminator, generator,NoiseLength,optim)
@@ -296,13 +267,21 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
     discrRealAccuracy = np.zeros(length)
     genLoss = np.zeros(length)
     genAccuracy = np.zeros(length)
+    bepochArray = np.linspace(1,int(epochs*batch_count),int(epochs*batch_count),endpoint=True)
+    length = len(bepochArray)
+    bdiscrFakeLoss = np.zeros(length)
+    bdiscrRealLoss = np.zeros(length)
+    bdiscrFakeAccuracy = np.zeros(length)
+    bdiscrRealAccuracy = np.zeros(length)
+    bgenLoss = np.zeros(length)
+    bgenAccuracy = np.zeros(length)
     y_real = 1
-    datagen = createDataGen()
     batches = datagen.flow(X_train,y=None, batch_size = batch_size)
     if Use1sidedLabelSmooth:
         y_real = 0.9
     y_false= np.zeros(batch_size)
     y_true = np.ones(batch_size)*y_real
+    b = 0
     for e in range(1, epochs+1 ):
         for _ in range(batch_count): #batch_size in version from jacques
             #generate  random noise as an input  to  initialize the  generator
@@ -337,7 +316,10 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
             discrFakeLoss[e-1] += discrimFakeEval[0]/batch_count
             discrRealLoss[e-1] += discrimRealEval[0]/batch_count
             discrFakeAccuracy[e-1] += discrimFakeEval[1]/batch_count
-            discrRealAccuracy[e-1] += discrimFakeEval[1]/batch_count
+
+            bdiscrFakeLoss[b] = discrimFakeEval[0]
+            bdiscrRealLoss[b] = discrimRealEval[0]
+            bdiscrFakeAccuracy[b] = discrimFakeEval[1]
 
             #Tricking the noised input of the Generator as real data
             noise= np.random.normal(0,1, [batch_size, NoiseLength])
@@ -354,15 +336,18 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
             genEval = gan.evaluate(noise,y_gen,verbose =0)
             genLoss[e-1] += genEval[0]/batch_count
             genAccuracy[e-1] += genEval[1]/batch_count
+            bgenLoss[b] += genEval[0]
+            bgenAccuracy[b] += genEval[1]
+            b = b+1
         # plot examples of generated images
         if e == 1 or e % PlotEpochs == 0:
             plot_generated_images(e, generator,NoiseLength,image_size)
         if e in saveEpochs:
             saveModel(saveDir,str(e)+'thEpoch.h5',gan,generator,discriminator)
-            plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,discrRealAccuracy,genAccuracy)
+            plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,genAccuracy)
     saveModel(saveDir,'finalModel.h5',gan,generator,discriminator)
-    plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,discrRealAccuracy,genAccuracy)
-
+    plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,genAccuracy)
+    plotGanEvolution(bepochArray,bdiscrFakeLoss,bdiscrRealLoss,bgenLoss,bdiscrFakeAccuracy,bgenAccuracy,plus = 'NonAveraged')
 
 
 
@@ -424,8 +409,8 @@ bootstrapDir =None
     if bootstrap == True:
         CPselection = np.random.randint(0,nCP,nCP)
         CPobserved,CPerr = CPobserved[CPselection],CPerr[CPselection]
-    CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
-    CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
+    CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to radian & cast to tensor
+    CPerr = tf.constant(CPerr)*np.pi/180 #conversion to radian & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
         if bootstrap == True:
             V2Artificial = V2Artificial[V2selection]
@@ -460,19 +445,19 @@ bootstrapDir =None
         return tf.math.exp(-2*np.pi*1j*(x*u+y*v))
 
     #preforms a binlinear interpolation on grid at continious pixel coordinates ufunc,vfunc
-    def bilinearInterp(grid,ufunc,vfunc):
+    def bilinearInterp(grid,vfunc,ufunc):
 
-        ubelow = np.floor(ufunc).astype(int)
         vbelow = np.floor(vfunc).astype(int)
-        uabove = ubelow +1
+        ubelow = np.floor(ufunc).astype(int)
         vabove = vbelow +1
-        coords = [[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]]
+        uabove = ubelow +1
+        coords = [[[0,vbelow[i],ubelow[i]] for i in range(len(ufunc))]]
         interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
-        coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
+        coords1 =tf.constant([[[0,vabove[i],uabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
-        coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
+        coords2 = tf.constant([[[0,vabove[i],ubelow[i]] for i in range(len(ufunc))]])
         interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
-        coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
+        coords3 = tf.constant([[[0,vbelow[i],uabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
 
         return interpValues
@@ -610,8 +595,6 @@ bootstrapDir =None
         #compute the fourier transform of the images
         y_pred = tf.squeeze(y_pred,axis = 3)
         y_pred = (y_pred+1)/2
-        #y_pred = (y_pred - K.min(y_pred))/(K.max(y_pred)-K.min(y_pred))   #/K.sum(K.sum(y_pred,axis =2),axis =1)
-        #y_pred = y_pred/K.sum(K.sum(y_pred,axis =2),axis=1)
         y_pred = tf.cast((y_pred),tf.complex128)
         y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
         ftImages = tf.signal.fft2d(y_pred)#is complex!!
@@ -619,7 +602,7 @@ bootstrapDir =None
         coordsMax = [[[[0,int(ImageSize/2),int(ImageSize/2)]]]]
         ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
         VcomplForV2 = compTotalCompVis(ftImages,u,v,wavelV2)
-        V2generated = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images!!!!!!!!! use pow again!!!!!!!
+        V2generated = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images
 
         V2Chi2Terms = K.pow(V2observed - V2generated,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
         #V2Chi2Terms = V2Chi2Terms
@@ -660,22 +643,23 @@ returns:
     data likelihood cost function for the provided data
 
 """
-def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = True,V2Artificial = None,CPArtificial = None,bootstrap= False):
+def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = True,V2Artificial = None,CPArtificial = None,bootstrap= False,bootstrapDir =None):
     data = oi.read(DataDir,filename)
     dataObj = data.givedataJK()
     V2observed, V2err = dataObj['v2']
     nV2 = len(V2err)
     if bootstrap == True:
-        V2selection = np.random.randint(0,nV2)
+        V2selection = np.random.randint(0,nV2,nV2)
         V2observed, V2err =V2observed[V2selection], V2err[V2selection]
     V2observed = tf.constant(V2observed)#conversion to tensor
     V2err = tf.constant(V2err)#conversion to tensor
     CPobserved, CPerr = dataObj['cp']
+    nCP = len(CPerr)
     if bootstrap == True:
         CPselection = np.random.randint(0,nCP,nCP)
         CPobserved,CPerr = CPobserved[CPselection],CPerr[CPselection]
-    CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to degrees & cast to tensor
-    CPerr = tf.constant(CPerr)*np.pi/180 #conversion to degrees & cast to tensor
+    CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to radian & cast to tensor
+    CPerr = tf.constant(CPerr)*np.pi/180 #conversion to radian & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
         if bootstrap == True:
             V2Artificial = V2Artificial[V2selection]
@@ -687,6 +671,7 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     if bootstrap == True:
         u, u1, u2, u3 = u[V2selection], u1[CPselection], u2[CPselection], u3[CPselection]
         v, v1, v2, v3 = v[V2selection], v1[CPselection], v2[CPselection], v3[CPselection]
+    wavel0 = 1.65 *10**(-6)
     wavelV2 = dataObj['wave'][0]
     wavelCP = dataObj['wave'][1]
     if bootstrap == True:
@@ -697,18 +682,18 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     spacialFreqPerPixel = (3600/(0.001*ImageSize*pixelSize))*(180/np.pi)
 
     #u,v must be provided in pixel number!!!
-    def bilinearInterp(grid,ufunc,vfunc):
-        ubelow = np.floor(ufunc).astype(int)
+    def bilinearInterp(grid,vfunc,ufunc):
         vbelow = np.floor(vfunc).astype(int)
-        uabove = ubelow +1
+        ubelow = np.floor(ufunc).astype(int)
         vabove = vbelow +1
-        coords = [[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]]
+        uabove = ubelow +1
+        coords = [[[0,vbelow[i],ubelow[i]] for i in range(len(ufunc))]]
         interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
-        coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
+        coords1 =tf.constant([[[0,vabove[i],uabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
-        coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
+        coords2 = tf.constant([[[0,vabove[i],ubelow[i]] for i in range(len(ufunc))]])
         interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
-        coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
+        coords3 = tf.constant([[[0,vbelow[i],uabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
         return interpValues
 
@@ -779,9 +764,9 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
         ax1=plt.subplot(gs[0]) # sharex=True)
         maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
-        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',cmap ='rainbow',c = np.real(wavelCP.numpy())[maskcp],alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(maxB,CPobserved[maskcp],s=15,marker='*',label = 'observed',cmap ='rainbow',c = np.real(wavelCP.numpy())[maskcp],alpha=0.4,edgecolors ='k',linewidth=0.15)
         plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='k')
+        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
         plt.legend()
         plt.ylabel(r'closure phase(radian)',fontsize =12)
 
@@ -805,9 +790,9 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
         ax1=plt.subplot(gs[0]) # sharex=True)
         maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
-        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='r')
+        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         plt.legend()
         plt.ylabel(r'closure phase(radian)',fontsize =12)
 
@@ -839,7 +824,7 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
         complexV  = bilinearInterp(ftImages,(v/spacialFreqPerPixel)+int(ImageSize/2),(u/spacialFreqPerPixel)+int(ImageSize/2))
         #VcomplForV2 = compTotalCompVis(ftImages,u,v,wavelV2)
-        V2generated = tf.math.abs(complexV)**2# computes squared vis for the generated images!!!!!!!!! use pow again!!!!!!!
+        V2generated = tf.math.abs(complexV)**2# computes squared vis for the generated images
 
         V2Chi2Terms = K.pow(V2observed - V2generated,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
         #V2Chi2Terms = V2Chi2Terms
@@ -849,10 +834,15 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         CPgenerated  = tf.math.angle(complV1)
         complV2  = bilinearInterp(ftImages,(v2/spacialFreqPerPixel)+int(ImageSize/2),(u2/spacialFreqPerPixel)+int(ImageSize/2))
         CPgenerated += tf.math.angle(complV2)
-        complV3  = bilinearInterp(ftImages,(v2/spacialFreqPerPixel)+int(ImageSize/2),(u2/spacialFreqPerPixel)+int(ImageSize/2))
+        complV3  = bilinearInterp(ftImages,(v3/spacialFreqPerPixel)+int(ImageSize/2),(u3/spacialFreqPerPixel)+int(ImageSize/2))
         CPgenerated -= tf.math.angle(complV3)
-        DiffComplexPhasors = tf.math.abs(tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPobserved),CPobserved))- tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPgenerated),CPgenerated)))
-        CPchi2Terms=K.pow(DiffComplexPhasors,2)/(K.pow(CPerr,2)*nCP)
+        #DiffComplexPhasors = tf.math.abs(tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPobserved),CPobserved))- tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPgenerated),CPgenerated)))
+        #CPchi2Terms= K.pow(DiffComplexPhasors,2)/(K.pow(CPerr,2)*nCP)
+        CPchi2Terms = 2*(1-tf.math.cos(CPobserved-CPgenerated))/(K.pow(CPerr,2)*nCP)
+        #CPchi2Terms = K.pow(tf.math.atan2(tf.math.sin(CPobserved-CPgenerated),tf.math.cos(CPobserved-CPgenerated)),2)/(K.pow(CPerr,2)*nCP)
+        #CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
+        #CPchi2Terms = (CPobserved-CPgenerated)-2*np.pi*tf.math.floor((CPobserved-CPgenerated)/(2*np.pi)+0.5)
+        #CPchi2Terms= K.pow(CPchi2Terms,2)/(K.pow(CPerr,2)*nCP)
         CPloss = K.sum(CPchi2Terms,axis=1)
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
@@ -1297,7 +1287,7 @@ class framework:
         the reconstructed image for a single noise vector
 
     """
-    def SingleRun(self,Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 250,image_Size = 128,hyperParam = 2,NoiseLength = 100,saveDir  = '',plotAtEpoch = [],loud = False):
+    def SingleRun(self,Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 250,image_Size = 128,hyperParam = 2,NoiseLength = 100,saveDir  = '',plotAtEpoch = [],loud = False,Dir =None):
         #create the network with two cost terms
         discriminator.trainable =False
         #for layer in discriminator.layers:
@@ -1449,7 +1439,8 @@ class framework:
                                             )
         else:
             dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
-                                    forTraining = True,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial)
+                                    forTraining = True,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial,
+                                    bootstrap = bootstrapping)
         GeneratorCopy = tf.keras.models.clone_model(Generator)
         GeneratorCopy.set_weights(Generator.get_weights())
         for r in range(nrRestarts):
@@ -1467,11 +1458,12 @@ class framework:
                                             pixelSize,
                                             epochs,
                                             image_Size,
-                                            hyperParam,
-                                            NoiseLength,
+                                            hyperParam =hyperParam,
+                                            NoiseLength = NoiseLength,
                                             saveDir  = Iter_dir,
                                             plotAtEpoch= plotAtEpoch,
-                                            loud = loud
+                                            loud = loud,
+                                            Dir = str(r)
                                             )
             mean, variance = updateMeanAndVariance(r+1,mean,variance,m)
             image= np.array([m],dtype = np.float64)
@@ -1489,7 +1481,7 @@ class framework:
         final_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,'meanImage'))
         if not os.path.isdir(final_dir):
             os.makedirs(final_dir)
-        plotMeanAndSTD(mean,variance,image_Size,pixelSize,final_dir,plotVar = plotvar)
+        plotMeanAndSTD(median,variance,image_Size,pixelSize,final_dir,plotVar = plotvar)
         #If median is prefered
         #final_median_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,'medianImage'))
         #if not os.path.isdir(final_median_dir):
@@ -1507,8 +1499,9 @@ class framework:
             #If median is prefered
             #chi2,v2,cp,fprior = self.likelihoodVal(median,bootstrapDir)
             #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
-            #self.toFits(median, image_Size, pixelSize, bootstrapDir+'/'+'median',comment = commnt)
+            self.toFits(median, image_Size, pixelSize, bootstrapDir+'/'+'median',comment = commnt,chi2s =self.likelihoodVal(median,bootstrapDir))
             self.toFits(cubeA, image_Size, pixelSize, bootstrapDir+'/'+'ImageCube',depth =cubeA.shape[0],ctype3 ='Noise vector number')
+            np.save(os.path.join(os.getcwd(),bootstrapDir+'/'+'median') ,median)
         else:
             #chi2,v2,cp,fprior = self.likelihoodVal(mean)
             #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
@@ -1518,7 +1511,7 @@ class framework:
             commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
             self.toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),chi2s =self.likelihoodVal(median))
             self.toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
-        return mean
+        return median
 
     """
     runGrid
@@ -1638,7 +1631,7 @@ class framework:
 
     parameters:
         self: an instance of framework
-        mean: the image for which to compute the chi square terms and regularization term
+        mean: the image for which to compute the chi square terms and regularization term, has to range between 0 and 1
         bootstrapDir: directory s
     Returns:
         lossValue: the total "reduced" chi2
@@ -1671,7 +1664,9 @@ class framework:
                                         )
         else:
             dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
-                                forTraining = False,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial)
+                                forTraining = False,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial,
+                                bootstrap = False,
+                                bootstrapDir = bootstrapDir)
         lossValue, V2loss , CPloss = dataLikelihood(None,img)
 
         score = self.discriminator.predict(imgNP.reshape(1,self.imageSize,self.imageSize,1))
