@@ -293,11 +293,11 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
                 # Get a random set of  real images
                 image_batch = batches.next()
                 #plt.figure()
-                #plt.imshow(np.squeeze(image_batch[1]),interpolation=None,cmap='hot')
-                #plt.axis('off')
+                #plt.imshow(np.squeeze(image_batch[1]),interpolation=None,extent = [-image_size*0.1/2,image_size*0.1/2,-image_size*0.1/2,image_size*0.1/2],cmap='hot')
                 #plt.tight_layout()
                 #plt.savefig('example loadedImage %d.png'%e)
                 #plt.close()
+                #quit()
                 # if the batch created by the generator is too small, resample
                 if image_batch.shape[0] != batch_size:
                     batches = datagen.flow(X_train,y=None, batch_size = batch_size)
@@ -430,7 +430,7 @@ bootstrapDir =None
         wavelCP = wavelCP[CPselection]
     wavelV2 = tf.constant(wavelV2,dtype = tf.complex128) #conversion to tensor
     wavelCP = tf.constant(wavelCP,dtype = tf.complex128) #conversion to tensor
-     #divide u,v by this number to get the pixelcoordinate
+    #divide u,v by this number to get the pixelcoordinate
     x = x*np.pi*0.001/(3600*180)
     y = y*np.pi*0.001/(3600*180)
     UDflux = UDflux/100
@@ -445,21 +445,19 @@ bootstrapDir =None
         return tf.math.exp(-2*np.pi*1j*(x*u+y*v))
 
     #preforms a binlinear interpolation on grid at continious pixel coordinates ufunc,vfunc
-    def bilinearInterp(grid,vfunc,ufunc):
-
-        vbelow = np.floor(vfunc).astype(int)
+    def bilinearInterp(grid,ufunc,vfunc):
         ubelow = np.floor(ufunc).astype(int)
-        vabove = vbelow +1
+        vbelow = np.floor(vfunc).astype(int)
         uabove = ubelow +1
-        coords = [[[0,vbelow[i],ubelow[i]] for i in range(len(ufunc))]]
+        vabove = vbelow +1
+        coords = [[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]]
         interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
-        coords1 =tf.constant([[[0,vabove[i],uabove[i]] for i in range(len(ufunc))]])
+        coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
-        coords2 = tf.constant([[[0,vabove[i],ubelow[i]] for i in range(len(ufunc))]])
+        coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
         interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
-        coords3 = tf.constant([[[0,vbelow[i],uabove[i]] for i in range(len(ufunc))]])
+        coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
-
         return interpValues
 
     #plots a comperison between observations and observables of the reconstruction,aswell as the uv coverage
@@ -682,18 +680,18 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     spacialFreqPerPixel = (3600/(0.001*ImageSize*pixelSize))*(180/np.pi)
 
     #u,v must be provided in pixel number!!!
-    def bilinearInterp(grid,vfunc,ufunc):
-        vbelow = np.floor(vfunc).astype(int)
+    def bilinearInterp(grid,ufunc,vfunc):
         ubelow = np.floor(ufunc).astype(int)
-        vabove = vbelow +1
+        vbelow = np.floor(vfunc).astype(int)
         uabove = ubelow +1
-        coords = [[[0,vbelow[i],ubelow[i]] for i in range(len(ufunc))]]
+        vabove = vbelow +1
+        coords = [[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]]
         interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
-        coords1 =tf.constant([[[0,vabove[i],uabove[i]] for i in range(len(ufunc))]])
+        coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
-        coords2 = tf.constant([[[0,vabove[i],ubelow[i]] for i in range(len(ufunc))]])
+        coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
         interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
-        coords3 = tf.constant([[[0,vbelow[i],uabove[i]] for i in range(len(ufunc))]])
+        coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
         return interpValues
 
@@ -763,16 +761,17 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         maskcp = CPerr < 10.0
         gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
         ax1=plt.subplot(gs[0]) # sharex=True)
+        cpWrapped = tf.math.atan2(tf.math.sin(CPgenerated),tf.math.cos(CPgenerated))
         maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
         plt.scatter(maxB,CPobserved[maskcp],s=15,marker='*',label = 'observed',cmap ='rainbow',c = np.real(wavelCP.numpy())[maskcp],alpha=0.4,edgecolors ='k',linewidth=0.15)
         plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='k')
-        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(maxB,cpWrapped[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
         plt.legend()
         plt.ylabel(r'closure phase(radian)',fontsize =12)
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = np.real(wavelCP)[maskcp],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors=colors.to_rgba('k', 0.1), linewidth=0.15)
+        plt.scatter(maxB,((CPobserved-cpWrapped[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = np.real(wavelCP)[maskcp],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors=colors.to_rgba('k', 0.1), linewidth=0.15)
         #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
         #c[0].set_color(color)
 
@@ -792,13 +791,13 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
         plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='r')
-        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.scatter(maxB,cpWrapped[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         plt.legend()
         plt.ylabel(r'closure phase(radian)',fontsize =12)
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.scatter(maxB,((CPobserved-cpWrapped[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
         #c[0].set_color(color)
 
@@ -1255,8 +1254,8 @@ class framework:
         self.useSparco = False
         self.V2Artificial = None
         self.CPArtificial = None
-        self.useSparco= False
         self.fullNet = None
+
     def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter):
         self.x =x
         self.y =y
@@ -1295,8 +1294,7 @@ class framework:
         #        layer.trainable = True
         Generator.trainable = True
         if self.fullNet == None:
-            self.fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength,opt)
-
+            self.fullNet  = createNetwork(discriminator,Generator,dataLikelihood,hyperParam,NoiseLength,opt)
         # initialize empty arrays to store the cost evolution
         diskyLoss = np.zeros(epochs)
         fitLoss = np.zeros(epochs)
