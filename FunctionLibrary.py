@@ -109,13 +109,11 @@ def load_data(dir,imagesize):
     img = img.resize((imagesize,imagesize),Image.BILINEAR )
     images= np.array([np.array(img)[:, :, np.newaxis]])
     images = images/np.max(images)
-    #images=(images-np.min(images))/(np.max(images)-np.min(images))
     for i in range(1,len(directories)):
         image = fits.getdata(directories[i], ext=0)
         img = Image.fromarray(image)
         img = img.resize((imagesize,imagesize),Image.BILINEAR )
         image=np.array([np.array(img)[:, :, np.newaxis]])
-        #image=(image-np.min(image))/(np.max(image)-np.min(image))
         image = image/np.max(image)
         images = np.concatenate([images, image]) #add the rescaled image to the array
     # normalize to [-1,+1]
