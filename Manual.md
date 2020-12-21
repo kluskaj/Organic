@@ -18,8 +18,8 @@ Lines 17 and 18 copy TrainGAN.py and the function library to the created directo
 the following sections are present in the TrainGAN.py:
 
 -Network parameters:
-  --these parameters are used to determine the neural network architectures, and are used in the functions **create_generator()** and **create_discriminator**
-  --**image_Size
+  -these parameters are used to determine the neural network architectures, and are used in the functions **create_generator()** and **create_discriminator**
+  -**image_Size
   
 
 
