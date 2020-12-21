@@ -18,11 +18,11 @@ Lines 17 and 18 copy TrainGAN.py and the function library to the created directo
 the following sections are present in the TrainGAN.py:
 
 * Network parameters:
-  * these parameters are used to determine the neural network architectures in the functions **create_generator()** and **create_discriminator()**
+   these parameters are used to determine the neural network architectures in the functions **create_generator()** and **create_discriminator()**
   * **image_Size** is used to scale the networks to the amount of pixels in the images, aswell as set the pixel size to which the training data images are rescaled using biliniear interpolation.
   * **NoiseLength** set the length of the input noise vector to te generator.
 
-*Training parameters:
+* Training parameters:
   * **NumberOfEpochs** the number of iterations of taining over the intire training dataset
   * **BatchSize** The number of images used to calculate the gradients used to update the networks iteratively, should be shosen as large as possible give the memory constraints
   * **PlotEpochs** = 25 Epoch interval after which examples of generated images are stored
