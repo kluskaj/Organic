@@ -31,11 +31,10 @@ these parameters determine how the GAN is trained
   * **saveEpochs** : epochs at which to save the networks
   * **OverTrainDiscr** : the amount the discriminator is trained more than the generator in each epoch (if 2 the discriminator will be trained for twice the total dataset in an epoch)
  
- *Directories:
-   * data_Dir `<= os.path.expandvars('${VSC_DATA}/CNN/grid_large_disks_unifCosi/[*/Image*NOSTAR.fits') Direcories at which the images(fits format) are located >`
-save_dir = os.path.join(os.getcwd(), 'saved_models') #directory where the trained networks are stored
-#model_name = 'version1' #name of the stored keras model, a .h5 file extension is used for the stored keras model,
-                        # the component networks are stored by adding the component name in front of this string
+* Directories:
+  * **data_Dir** :  `< os.path.expandvars('${VSC_DATA}/CNN/grid_large_disks_unifCosi/[*/Image*NOSTAR.fits') Direcories at which the images(fits format) are located >`
+  * **save_dir** :  #directory where the trained networks are stored `<os.path.join(os.getcwd(), 'saved_models')>` is used to store the networks in a folder named ##saved_models##
+
 loadFromCube = True #if true loads data from a single Fits cube, if false searches a given directory
 
   
