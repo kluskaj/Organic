@@ -34,9 +34,10 @@ these parameters determine how the GAN is trained
 * Directories:
   * **data_Dir** :  `< os.path.expandvars('${VSC_DATA}/CNN/grid_large_disks_unifCosi/[*/Image*NOSTAR.fits') Direcories at which the images(fits format) are located >`
   * **save_dir** :  #directory where the trained networks are stored `<os.path.join(os.getcwd(), 'saved_models')>` is used to store the networks in a folder named ##saved_models##
+  * **loadFromCube** Bollean, if true loads data from a single Fits cube, if false searches a given directory
 
-loadFromCube = True #if true loads data from a single Fits cube, if false searches a given directory
-
+* Networks
+  * In this section the architecture of the generator and discriminator networks are defined. The example networks given in the file can be addapted for different image and inputnoise sizes using the parameters listed under section ##Network parameters##. In order to understand the networks defined here, or to implement your own neural network architectures, see the [Keras documentation](https://keras.io/api/) 
   
 
 
