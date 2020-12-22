@@ -4,18 +4,19 @@ In order to reconstruct images a generative adversarial neural network (GAN) mus
 This is phase 1 of training.
 This training can be done by running the file:
   
-  TrainGAN.py
+  **TrainGAN.py**
   
 running this script on a HPC can be done using the
 
-  TrainGan.pbs
+  **TrainGan.pbs**
 
 shell script.
-In this file the used resourse are set in the header, an email address can also be added here to notify you if your job starts running.
-This shell script also creates a directory where the results of this pretraining phase will be stored, this directories need to be changed on line 16 and 17.
-Lines 17 and 18 copy TrainGAN.py and the function library to the created directory allowing to parameters used for a run to be reviewed afterwards.
+In this file the used resourse are set in the header, an email address can also be added here to notify you if your job starts running. 
+On line 13 the path to miniconda is exported. The environment containing all the neccesary python packages is activated on line 14. 
+This shell script also creates a directory where the results of this pretraining phase will be stored, this directories need to be changed on line 15 and 16.
+Lines 17 and 18 copy TrainGAN.py and the function library to the created directory allowing it to be ran from that location and to parameters used for a run to be reviewed afterwards.
 
-the following sections are present in the TrainGAN.py:
+The following sections are present in the **TrainGAN.py**:
 
 * Network parameters:
    these parameters are used to determine the neural network architectures in the functions **create_generator()** and **create_discriminator()**
@@ -34,10 +35,29 @@ these parameters determine how the GAN is trained
 * Directories:
   * **data_Dir** :  `< os.path.expandvars('${VSC_DATA}/CNN/grid_large_disks_unifCosi/[*/Image*NOSTAR.fits') Direcories at which the images(fits format) are located >`
   * **save_dir** :  #directory where the trained networks are stored `<os.path.join(os.getcwd(), 'saved_models')>` is used to store the networks in a folder named ##saved_models##
-  * **loadFromCube** Bollean, if true loads data from a single Fits cube, if false searches a given directory
+  * **loadFromCube** : Bollean, if true loads data from a single Fits cube, if false searches a given directory
 
 * Networks
-  * In this section the architecture of the generator and discriminator networks are defined. The example networks given in the file can be addapted for different image and inputnoise sizes using the parameters listed under section ##Network parameters##. In order to understand the networks defined here, or to implement your own neural network architectures, see the [Keras documentation](https://keras.io/api/) 
+  * In this section the architecture of the generator and discriminator networks are defined. The example networks given in the file can be addapted for different image and inputnoise sizes using the parameters listed under section ##Network parameters##. In order to understand the networks defined here, or to implement your own neural network architectures, see the [Keras documentation](https://keras.io/api/).
+  * summarys of the used networks are printed in the output (.out) file on lines 162 to 165.
+  
+* Perform training
+  * Here the training routine is called from the function library for al of the parameters set in the previous sections of the file. Leave this as is for ease of use.
+  
+After a GAN is trained the image reconstruction can be preformed. This can be preformed by running the
+  ImageReconstruction.py
+script. running this script on a HPC can be done using the 
+  reconstructImages.pbs 
+shell script. 
+In this file the used resourse are set in the header, an email address can also be added here to notify you if your job starts running.
+On line 13 the path to miniconda is exported. The environment containing all the neccesary python packages is activated on line 14. 
+This shell script also creates a directory where the results of this pretraining phase will be stored, this directories need to be changed on line 15 and 16.
+Lines 17 and 18 copy TrainGAN.py and the function library to the created directory allowing for it to be ran from that location and to parameters used for a run to be reviewed afterwards.
+
+The following sections are present in **ImageReconstruction.py**
+
+* Directories of the pretrained neural networks:
+  * here the directories of the pretrained generator and discriminator need to be altered.
   
 
 
