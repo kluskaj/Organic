@@ -57,7 +57,16 @@ Lines 17 and 18 copy TrainGAN.py and the function library to the created directo
 The following sections are present in **ImageReconstruction.py**
 
 * Directories of the pretrained neural networks:
-  * here the directories of the pretrained generator and discriminator need to be altered.
+  * Here the directories of the pretrained generator and discriminator need to be altered.
+  * The networks are loaded on the lines following the directories. Leave this as is for ease of use.
+* Parameters for the reconstruction
+  * **hyperParam** : The hyperparameter tuning the strength of the regularization
+  * **image_Size** : Pixel size of the image which are created (needs to be the same as used during GAN training).
+  * **NoiseLength** : Length of the inputvector suplied to the generator (needs to be the same as used during GAN training).
+  * **epochs** : The number of iterations within a single optimazation of the generator.
+  * **numberOfRestarts** : The number of times to restart the image computation for a different noise vector.
+  * **BoothstrapIter** : The number of times to alter the dataset during Boothstrapping.
+  * **pixelSize** : Angular size of a pixel size in milli arc seconds (mas).
   
 
 
