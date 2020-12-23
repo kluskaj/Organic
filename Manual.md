@@ -58,6 +58,7 @@ The following sections are present in **ImageReconstruction.py**
 
 * Directories of the pretrained neural networks:
   * Here the directories of the pretrained generator and discriminator need to be altered.
+  * **discPath** is used to load the discriminator and **genPath** to load the generator.
   * The networks are loaded on the lines following the directories. Leave this as is for ease of use.
 * Parameters for the reconstruction
   * **hyperParam** : The hyperparameter tuning the strength of the regularization
@@ -65,8 +66,16 @@ The following sections are present in **ImageReconstruction.py**
   * **NoiseLength** : Length of the inputvector suplied to the generator (needs to be the same as used during GAN training).
   * **epochs** : The number of iterations within a single optimazation of the generator.
   * **numberOfRestarts** : The number of times to restart the image computation for a different noise vector.
-  * **BoothstrapIter** : The number of times to alter the dataset during Boothstrapping.
+  * **BoothstrapIter** : The number of times to alter the dataset during Boothstrapping. Only used when bootsrapping 
   * **pixelSize** : Angular size of a pixel size in milli arc seconds (mas).
+* Load the data used in the image reconstruction.
+  * TODO
+  * dirV2 =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDataSets/V2Model_CLLac_clip_baselines.npy')
+  * simV2 =np.load(dirV2)
+  * dirCP =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDataSets/CPModel_CLLac_clip_baselines.npy')
+  * simCP =np.load(dirCP)
+  * **DataDir** = os.path.expandvars('${VSC_DATA}/summerjobTests/CLLac_data/') directory of the OIfits file in case of real data
+  * **filename** : '*.fits' directory and name of the OIfits file in case of real data
   
 
 
