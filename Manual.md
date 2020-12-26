@@ -68,6 +68,7 @@ The following sections are present in **ImageReconstruction.py**
   * **numberOfRestarts** : The number of times to restart the image computation for a different noise vector.
   * **BoothstrapIter** : The number of times to alter the dataset during Boothstrapping. Only used when bootsrapping 
   * **pixelSize** : Angular size of a pixel size in milli arc seconds (mas).
+  * **optimizer** : The optimizer to be used for fine tuning the the generator. This optimizer is given as a dictionary and is reset for each reset of the generator training.
 * Load the data used in the image reconstruction.
   * TODO
   * dirV2 =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDataSets/V2Model_CLLac_clip_baselines.npy')
