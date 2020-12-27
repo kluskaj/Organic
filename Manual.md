@@ -70,11 +70,27 @@ The following sections are present in **ImageReconstruction.py**
   * **pixelSize** : Angular size of a pixel size in milli arc seconds (mas).
   * **optimizer** : The optimizer to be used for fine tuning the the generator. This optimizer is given as a dictionary and is reset for each reset of the generator training.
 * Load the data used in the image reconstruction.
-  * **dirV2** : Directory of a numpy array containing artificial V2 values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
-  * **dirCP** : Directory of a numpy array containing artificial V2 values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
-  * simCP =np.load(dirCP)
-  * **DataDir** = os.path.expandvars('${VSC_DATA}/summerjobTests/CLLac_data/') directory of the OIfits file in case of real data
-  * **filename** : '*.fits' directory and name of the OIfits file in case of real data
+  * **dirV2** : Directory of a numpy array containing artificial squared visibility values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
+  * **dirCP** : Directory of a numpy array containing artificial closure phase values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
+  * The artificial data values are loaded on the lines following the directories. Leave this as is for ease of use.
+  * **DataDir** Directory of the OIfits file(s) containing the data for the image reconstructions.
+  * **filename** :  name of the OIfits file(s) in case of real data. In order to use data from multiple files use an expression like: `<'*.fits'>` 
+  
+* set the SPARCO Parameters
+  * **x** : the right-ascention of a point source, to be modeled using SPARCO, in MAS.
+  * **y** :  the declination of a point source, to be modeled using SPARCO, in MAS.
+  * **UDflux** : The flux contribution of the a resolved central star, represented as a uniform disk (set to 0 for an unresloved point source), in percent
+  * **PointFlux** : The flux contribution of a point source star, in percent
+  * **denv** : the spectral index of the environment
+  * **dsec** :  the spectral index of the point source (the uniform disk source has a default index of -4).
+  * **UDdiameter** : The diameter of the resolved source in mas
+  
+* run the image reconstrution
+  * on line 78  a **framework** object is created using the parameters set using the previously set options.
+  * on line 81 the SPARCO parameters of the reconstruction are set. If you do not wish to use SPARCO, do not run this line.
+  * on line 84 the artificial squared visibility and closure phases are set. If you do not wish to use artificial data from numpy arrays, do not run this line.
+  * The following three run options are present: 
+    * **AveragingImageReconstruction**
   
 
 
