@@ -89,8 +89,16 @@ The following sections are present in **ImageReconstruction.py**
   * on line 78  a **framework** object is created using the parameters set using the previously set options.
   * on line 81 the SPARCO parameters of the reconstruction are set. If you do not wish to use SPARCO, do not run this line.
   * on line 84 the artificial squared visibility and closure phases are set. If you do not wish to use artificial data from numpy arrays, do not run this line.
-  * The following three run options are present: 
-    * **AveragingImageReconstruction**
+  * The following three run options are present as an atribute of the framework object: 
+    * **ImageReconstruction** : runs a single image reconstruction for the chosen parameters
+    * **bootstrappingReconstr** : Runs a boothstrapping of the image reconstruction. In this boothstrapping the closure phases and squared visibilities are treated independently.
+    * **runGrid** : Runs ImageReconstruction for all combinations of the given parameters. the parameters are:
+        nrRestarts: the amount of restarts to be used for each run of the grid
+        epochs: list with the number of epochs to use in differetn runs of the grid
+        mus: list with the values of hyperparameter for which to run the grid
+        **kwargs: lists of other parameters to alter during the runs of the grid.
+                  these can be the sparco parameters and pixelsize
+    * For ease of use these run options can be uncommented, when this is done they 
   
 
 
