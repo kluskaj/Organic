@@ -92,13 +92,14 @@ The following sections are present in **ImageReconstruction.py**
   * The following three run options are present as an atribute of the framework object: 
     * **ImageReconstruction** : runs a single image reconstruction for the chosen parameters
     * **bootstrappingReconstr** : Runs a boothstrapping of the image reconstruction. In this boothstrapping the closure phases and squared visibilities are treated independently.
-    * **runGrid** : Runs ImageReconstruction for all combinations of the given parameters. the parameters are:
-        nrRestarts: the amount of restarts to be used for each run of the grid
-        epochs: list with the number of epochs to use in differetn runs of the grid
-        mus: list with the values of hyperparameter for which to run the grid
-        **kwargs: lists of other parameters to alter during the runs of the grid.
-                  these can be the sparco parameters and pixelsize
-    * For ease of use these run options can be uncommented, when this is done they 
+    * For ease of use these first two run options can be uncommented, when this is done they use the parameters set in the 
+    * **runGrid** : Runs ImageReconstruction for all combinations of the given parameters. The parameters are that can be set are:
+        * nrRestarts: list with the amounts of restrarts for which to run the grid.
+        * epochs: list with the number of epochs to use in differetn runs of the grid
+        * mus: list with the values of hyperparameter for which to run the grid
+        * kwargs: lists of other parameters to alter during the runs of the grid.
+                  These can be the sparco parameters and pixelsize.
+    
   
 
 
