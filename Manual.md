@@ -44,7 +44,7 @@ these parameters determine how the GAN is trained
 Image preprocessing:
   * **dataGen**  an ImageDataGenerator used to preprocess the images from the training dataset. This preprocessing is applied after the images are rescaled using Bilinear interpolation. The documentation for this type of object can be found [here]( https://keras.io/api/preprocessing/image/#imagedatagenerator-class ).
   * one of the options in the ImageDataGenerator is to set a costum **preprocessing_function**. Two such options are already profided in the FunctionLibrary.py file. these are:
-    * **preprocesfunc5** : This adds a 1 in 5 chance to add a uniform backgroud randomly selected from a uniform distribution between 0 and 0.1 relative flux to an image uppon sampling.
+    * **preprocesfunc5** : This adds a 1 in 5 chance to add a uniform backgroud randomly selected from a uniform distribution between 0 and 0.1 relative flux to an image uppon sampling. The Image is renormalized to have a maximum flux equal to 1 after this is is done.
     * **preprocesfuncMax1** sets th maximum of the image to 1 after the rotation/zoom preformed in the ImageDataGenerator.
   
   
