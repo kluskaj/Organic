@@ -41,6 +41,13 @@ these parameters determine how the GAN is trained
   * In this section the architecture of the generator and discriminator networks are defined. The example networks given in the file can be addapted for different image and inputnoise sizes using the parameters listed under section ##Network parameters##. In order to understand the networks defined here, or to implement your own neural network architectures, see the [Keras documentation](https://keras.io/api/).
   * summarys of the used networks are printed in the output (.out) file on lines 162 to 165.
   
+Image preprocessing:
+  * **dataGen**  an ImageDataGenerator used to preprocess the images from the training dataset. This preprocessing is applied after the images are rescaled using Bilinear interpolation. The documentation for this type of object can be found [here]( https://keras.io/api/preprocessing/image/#imagedatagenerator-class ).
+  * one of the options in the ImageDataGenerator is to set a costum **preprocessing_function**. Two such options are already profided in the FunctionLibrary.py file. these are:
+    * **preprocesfunc5** : This adds a 1 in 5 chance to add a uniform backgroud randomly selected from a uniform distribution between 0 and 0.1 relative flux to an image uppon sampling.
+    * **preprocesfuncMax1** sets th maximum of the image to 1 after the rotation/zoom preformed in the ImageDataGenerator.
+  
+  
 * Perform training
   * Here the training routine is called from the function library for al of the parameters set in the previous sections of the file. Leave this as is for ease of use.
   
