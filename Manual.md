@@ -76,6 +76,7 @@ The following sections are present in **ImageReconstruction.py**
   * **BoothstrapIter** : The number of times to alter the dataset during Boothstrapping. Only used when bootsrapping 
   * **pixelSize** : Angular size of a pixel size in milli arc seconds (mas).
   * **optimizer** : The optimizer to be used for fine tuning the the generator. This optimizer is given as a dictionary and is reset for each reset of the generator training.
+  * **resetOpt** : Boolean. If true the optimizer is reset when the generator is reset, if false the state is carried over.
 * Load the data used in the image reconstruction.
   * **dirV2** : Directory of a numpy array containing artificial squared visibility values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
   * **dirCP** : Directory of a numpy array containing artificial closure phase values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
