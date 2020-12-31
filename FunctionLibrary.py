@@ -1477,7 +1477,6 @@ class framework:
                     opt = 'optimizers.'+self.opt['name']
                     opt = eval(opt)
                     opt = opt.from_config(self.opt)
-                    print(opt.get_config())
                     self.fullNet.compile(loss=[adjustedCrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
             Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
             if not os.path.isdir(Iter_dir) and loud ==True:
@@ -1544,7 +1543,7 @@ class framework:
             np.save(os.path.join(os.getcwd(),'median') ,median)
         return median
 
-    
+
 
 
     """
