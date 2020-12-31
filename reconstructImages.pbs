@@ -5,15 +5,15 @@
 #PBS -l partition=gpu
 #PBS -A lp_ganimgrec
 #PBS -N normalGanMoreEpochs
-#PBS -o GANstellarSurf.stdout
-#PBS -e GANstellarSurf.stderr
+#PBS -o art_stellarsurf.stdout
+#PBS -e art_stellarsurf.stderr
 #PBS -l nodes=1:ppn=9:gpus=1:skylake
 
 
 export PATH=${VSC_DATA}/miniconda3/bin:${PATH}
 conda activate tf
-mkdir -p ${VSC_DATA}/summerjobTests/GANstellarSurf/
-cd ${VSC_DATA}/summerjobTests/GANstellarSurf/
-cp ${VSC_DATA}/summerjobTests/TrainGAN.py .
+mkdir -p ${VSC_DATA}/summerjobTests/art_stellarsurf/
+cd ${VSC_DATA}/summerjobTests/art_stellarsurf/
+cp ${VSC_DATA}/summerjobTests/ImageReconstruction.py .
 cp ${VSC_DATA}/summerjobTests/FunctionLibrary.py .
-python ./TrainGAN.py
+python .ImageReconstruction.py

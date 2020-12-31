@@ -8,6 +8,7 @@ from tensorflow.keras.layers import Dense, Dropout, Input,Activation,LeakyReLU,L
 #from keras.models import Model,Sequential
 #from tensorflow.keras.layers.advanced_activations import LeakyReLU
 from tensorflow.keras.optimizers import Adam
+import tensorflow.keras.optimizers as optimizers
 from tensorflow.keras.utils import plot_model
 import tensorflow.keras.backend as K
 from PIL import Image
@@ -23,6 +24,7 @@ import scipy.special as sp
 from matplotlib import gridspec
 import matplotlib.colors as colors
 import gc
+import tensorflow_addons as tfa
 ################################################################################
 ############################### for GAN training ####################################
 ################################################################################
@@ -134,21 +136,15 @@ def load_data_fromCube(dir,imagesize):
     cube = fits.getdata(dir, ext=0)
     img = Image.fromarray(cube[0])
     img = img.resize((imagesize,imagesize),Image.BILINEAR )
+    #img=img.transpose(Image.FLIP_LEFT_RIGHT)
     images= np.array([np.array(img)[:, :, np.newaxis]])
     images = images/np.max(images)
     #images=(images-np.min(images))/(np.max(images)-np.min(images))
     for i in range(1,len(cube)):
-        if i == 41:
-            plt.figure()
-            plt.imshow(np.squeeze(cube[i]),interpolation=None,cmap='hot')
-            plt.axis('off')
-            plt.tight_layout()
-            plt.savefig('example loadedImage.png')
-            plt.close()
-            continue
         image = cube[i]
         img = Image.fromarray(image)
         img = img.resize((imagesize,imagesize),Image.BILINEAR )
+        #img=img.transpose(Image.FLIP_LEFT_RIGHT)
         image=np.array([np.array(img)[:, :, np.newaxis]])
         #image=(image-np.min(image))/(np.max(image)-np.min(image))
         image = image/np.max(image)
@@ -176,7 +172,8 @@ def plot_generated_images(epoch, generator,NoiseLength,image_Size, examples=36, 
     plt.figure(figsize=figsize)
     for i in range(generated_images.shape[0]):
         plt.subplot(dim[0], dim[1], i+1)
-        plt.imshow(generated_images[i],interpolation=None,cmap='hot')
+        plt.imshow(generated_images[i],origin = 'lower',interpolation=None,cmap='hot',vmin=-1,vmax=1)
+        #ax.invert_xaxis()
         plt.axis('off')
     plt.tight_layout()
     plt.savefig('cgan_generated_image %d.png' %epoch)
@@ -216,9 +213,43 @@ def saveModel(save_dir,model_name,GAN,generator,discr):
 
 
 
+"""
+preprocesfunc5
 
+parameters:
+    image: the input image
+returns:
+    sets the maximum flux in the image to 1 after the other preproccesing operations have been preformed.
 
+"""
+def preprocesfuncOff(image):
+    image = np.array(image)
+    int  = np.random.randint(5)
+    image = (image+1)/2
+    #if int ==0:
+    #    image = image + np.random.uniform(low=0.0, high=0.1)
+    image = image/np.max(image)
+    image = (image-0.5)*2
+    return image
 
+"""
+preprocesfunc5
+
+parameters:
+    image: the input image
+returns:
+    an image to wich 1 out of 5 times a uniform background is added from a uniform distribution between 0 and 0.1 relative flux.
+
+"""
+def preprocesfunc5(image):
+    image = np.array(image)
+    int  = np.random.randint(5)
+    image = (image+1)/2
+    if int ==0:
+        image = image + np.random.uniform(low=0.0, high=0.1)
+    image = image/(np.max(image))
+    image = ((image-0.5)*2)
+    return image
 
 
 """
@@ -291,7 +322,9 @@ def classicalGANtraining(gen,discr,optim,dir,image_size,NoiseLength,epochs=1, ba
                 # Get a random set of  real images
                 image_batch = batches.next()
                 #plt.figure()
-                #plt.imshow(np.squeeze(image_batch[1]),interpolation=None,extent = [-image_size*0.1/2,image_size*0.1/2,-image_size*0.1/2,image_size*0.1/2],cmap='hot')
+                #img = centerPhotocenter(tf.expand_dims(image_batch[1], axis=0), 128)
+                #mapable=plt.imshow((np.squeeze(img)+1)/2,interpolation=None,cmap='hot',vmin = 0,vmax = 1)
+                #plt.colorbar(mapable)
                 #plt.tight_layout()
                 #plt.savefig('example loadedImage %d.png'%e)
                 #plt.close()
@@ -448,7 +481,7 @@ bootstrapDir =None
         vbelow = np.floor(vfunc).astype(int)
         uabove = ubelow +1
         vabove = vbelow +1
-        coords = [[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]]
+        coords = tf.constant([[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]])
         interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
         coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
         interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
@@ -657,11 +690,11 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     CPobserved = tf.constant(CPobserved)*np.pi/180 #conversion to radian & cast to tensor
     CPerr = tf.constant(CPerr)*np.pi/180 #conversion to radian & cast to tensor
     if V2Artificial is not None and CPArtificial is not None:
-        if bootstrap == True:
-            V2Artificial = V2Artificial[V2selection]
-            CPArtificial = CPArtificial[CPselection]
         V2observed = tf.constant(V2Artificial)
         CPobserved = tf.constant(CPArtificial)
+        if bootstrap == True:
+            V2observed = V2observed[V2selection]
+            CPobserved = CPobserved[CPselection]
     u, u1, u2, u3 = dataObj['u']
     v, v1, v2, v3 = dataObj['v']
     if bootstrap == True:
@@ -795,10 +828,13 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(maxB,((CPobserved-cpWrapped[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        res = (((CPobserved-cpWrapped[0].numpy())%(np.sign(CPobserved-cpWrapped[0].numpy())*np.pi))/(CPerr))[maskcp]
+        print(np.max(((CPobserved-cpWrapped[0].numpy())%(np.sign(CPobserved-cpWrapped[0].numpy())*np.pi))))
+        print(np.min(((CPobserved-cpWrapped[0].numpy())%(np.sign(CPobserved-cpWrapped[0].numpy())*np.pi))))
+        plt.scatter(maxB,res,s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
         #c[0].set_color(color)
-
+        #plt.yscale('log')
         plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
         plt.ylabel(r'residuals',fontsize =12)
         plt.tight_layout()
@@ -840,7 +876,7 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         #CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
         #CPchi2Terms = (CPobserved-CPgenerated)-2*np.pi*tf.math.floor((CPobserved-CPgenerated)/(2*np.pi)+0.5)
         #CPchi2Terms= K.pow(CPchi2Terms,2)/(K.pow(CPerr,2)*nCP)
-        CPloss = K.sum(CPchi2Terms,axis=1)
+        CPloss = K.sum(CPchi2Terms,axis=1) #!!!!!!!!!!!this was changed !!!!
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
         if forTraining == True:
@@ -877,6 +913,7 @@ returns:
     these outputs are optimized using the dataLikelihood cost of choice and the adjusted binary_crossentropy as cost function.
 
 """
+
 def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength,opt):
     noise_input = Input(shape = (NoiseLength,))
     x = generator(noise_input)
@@ -889,15 +926,69 @@ def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength
     return gan
 
 """
-createNetwork
+centerPhotocenter
+
+parameters:
+    image: the image to be shifted, given in shape (1,imageSize,imageSize,1)
+    ImageSize: the number of pixels allong one axis of the image
+returns:
+    an image that is shifted to have it's photocenter in the middle of the image centered (pixel position ((imageSize-1)/2) )
+    (due to the discrete nature of the image this wil never truely be the case)
+    This shift is achieved by first "rolling" the image by the closest integer of the photocenter offset.
+    In this rolling operation the pixels shifted out of the image at an edge appear at the other side of the image.
+    The remainder of the shit is preformed using Bilinear interpolation
+
+
+"""
+def centerPhotocenter(image,imageSize):
+    image = (image +1)/2
+    ii, jj = tf.meshgrid(tf.range(imageSize), tf.range(imageSize), indexing='ij')
+    coords = tf.stack([tf.reshape(ii, (-1,)), tf.reshape(jj, (-1,))], axis=-1)
+    coords = tf.cast(coords, tf.float32)
+    # Rearrange input into one vector per volume
+    volumes_flat = tf.reshape(image, [-1, imageSize * imageSize , 1])
+    # Compute total mass for each volume
+    total_mass = tf.reduce_sum(volumes_flat, axis=1)
+    # Compute centre of mass
+    centre_of_mass = tf.reduce_sum(volumes_flat * coords, axis=1) / total_mass
+    centre_of_mass = -(centre_of_mass-((imageSize-1)/2))
+
+
+
+
+    intcentre_of_mass= tf.math.round(centre_of_mass)
+    image =tf.roll(image,shift=tf.cast(centre_of_mass[0,0],tf.int32), axis=1)
+    image =tf.roll(image,shift=tf.cast(centre_of_mass[0,1],tf.int32), axis=2)
+    centre_of_mass= centre_of_mass-intcentre_of_mass
+
+
+    image = tfa.image.translate(image,[[centre_of_mass[0,1],centre_of_mass[0,0]]],interpolation = 'BILINEAR')#,interpolation = 'NEAREST')#
+
+    print('centeringPhotocenter')
+    #printing cm after shift
+    #volumes_flat = tf.reshape(image, [-1, imageSize * imageSize , 1])
+    #Compute total mass for each volume
+    #total_mass = tf.reduce_sum(volumes_flat, axis=1)
+    #Compute centre of mass
+    #centre_of_mass = tf.reduce_sum(volumes_flat * coords, axis=1) / total_mass
+    #centre_of_mass = centre_of_mass-((imageSize-1)/2)
+
+    #tf.print("post shift:",centre_of_mass)
+    return (image-0.5)*2
+
+
+"""
+plot_generated_images2
 
 parameters:
     epoch: the epoch at which the image is created by the generator
     generator: the generator at the given epoch
     theOneNoiseVector: the noise vector used during this epoch of training
     image_Size: the pixel size of the create image
+    pixelSize: the angular size of one pixel in the image
+    save_dir:the directory where the image will be stored
 effect:
-    Creates and stores an the image generated at a stage during training
+    Creates and stores an the image generated at an epoch during one restartiteration of training
 
 """
 def plot_generated_images2(epoch, generator,theOneNoiseVector,image_Size,pixelSize,save_dir):
@@ -906,8 +997,9 @@ def plot_generated_images2(epoch, generator,theOneNoiseVector,image_Size,pixelSi
     generated_images = generated_images.reshape(100,image_Size,image_Size)
 
     plt.figure()
-    mapable = plt.imshow((generated_images[0]+1)/2,origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= np.min((generated_images[0]+1)/2),vmax =np.max((generated_images[0]+1)/2),interpolation=None)
-    np.save('cgan_generated_image %d.png' %epoch,(generated_images[0]+1)/2)
+    mapable = plt.imshow((generated_images[0]+1)/2,origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0,vmax =1,interpolation='nearest')
+
+    #np.save('cgan_generated_image %d.png' %epoch,(generated_images[0]+1)/2)
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
@@ -951,7 +1043,7 @@ def updateMeanAndVariance(I,mean,variance,image):
     image = image/np.sum(image)
     newmean = mean + (image - mean)/I
     if I > 1:
-        newvariance = ((I-1)*variance + (I-1)*(mean -newmean)**2 + (image - newmean)**2)/(I-1)
+        newvariance = ((I-1)*variance + (I)*(mean -newmean)**2 + (image - newmean)**2)/(I)
         variance = newvariance
     mean = newmean
     return mean, variance
@@ -1096,7 +1188,7 @@ effect:
 def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
     # plots the mean image,
     plt.figure()
-    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.,interpolation='nearest')
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
@@ -1109,9 +1201,10 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
 
     #plots the variance image
     plt.figure()
-    mapable = plt.imshow(np.sqrt(variance),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot')
+    mapable = plt.imshow(np.sqrt(variance),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',interpolation='nearest')
     ax = plt.gca()
     ax.invert_xaxis()
+    plt.colorbar(mapable)
     plt.xlabel(r'$\Delta \alpha (mas)$')
     plt.ylabel(r'$\Delta \delta (mas)$')
     plt.savefig(os.path.join(saveDir,'rmsImage.png') )
@@ -1119,8 +1212,8 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
 
     #plot the mean image with a 5 sigma significance contour.
     plt.figure()
-    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
-    plt.contour(mean/np.sqrt(variance), [5.], colors='b', origin='lower', extent=[-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2])
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.,interpolation='nearest')
+    plt.contour(mean/np.sqrt(variance), [6.], colors='b', origin='lower', extent=[-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2])
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
@@ -1131,7 +1224,7 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
 
     #plot the mean image with a 3 sigma significance contour.
     plt.figure()
-    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.,interpolation='nearest')
     plt.contour(mean/np.sqrt(variance), [3.], colors='b', origin='lower', extent=[-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2])
     ax = plt.gca()
     ax.invert_xaxis()
@@ -1143,7 +1236,7 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
 
     #plot the mean image with a 5 and 3 sigma significance contour.
     plt.figure()
-    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.)
+    mapable = plt.imshow(mean/np.max(mean),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',vmin= 0.,vmax =1.,interpolation='nearest')
     plt.contour(mean/np.sqrt(variance), [3.,5.],linewidths = 0.9,linestyles =['dashed','solid'], colors='b', origin='lower', extent=[-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2])
     ax = plt.gca()
     ax.invert_xaxis()
@@ -1156,7 +1249,7 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
 
     #plots the corresponding mean over standard deviation map
     plt.figure()
-    mapable = plt.imshow(mean/np.sqrt(variance),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot')
+    mapable = plt.imshow(mean/np.sqrt(variance),origin = 'lower',extent = [-image_Size*pixelSize/2,image_Size*pixelSize/2,-image_Size*pixelSize/2,image_Size*pixelSize/2],cmap='hot',interpolation='nearest')
     ax = plt.gca()
     ax.invert_xaxis()
     plt.xlabel(r'$\Delta \alpha (mas)$')
@@ -1165,82 +1258,10 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
     plt.savefig(os.path.join(saveDir,'meanOverSignImage.png'))
     plt.close()
 
-"""
-reconsruction
-
-parameters:
-        generator: the pre trained generator to use
-        discriminator: the pre trained discriminator to use
-        dataLikelihood: the data likelihood to use
-        epochs: the nulber of epochs for which to retrain the generator
-        image_Size: the number of pixels in the images allong one axis
-        hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
-        NoiseLength: the length of the noisevector used as input for the generator
-        beginepoch: the epoch at which the first contribution to the mean image is made
-        RandomWalkStepSize: size of the updates preformed to the noisevector following n= (n+RandomWalkStepSize*)
-        alterationInterval: number of epochs between a an additional contribution to the mean and variance image
-        plotinterval: the epoch interval between changes to the Noisevector and contributions to the
-        saveDir: directory to store the generator in its final state
-Returns:
-    the reconstructed image (mean over noisevectors)
-
-
-
-"""
-def reconsructionOLDway(Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 21000,image_Size = 64,hyperParam = 2,NoiseLength = 100,beginepoch =9000,RandomWalkStepSize =0.5,alterationInterval = 500,plotinterval = 3000,saveDir  = ''):
-    #create the network with two cost terms
-    #discriminator.compile(loss=adjustedCrossEntropy, optimizer=opt)
-    discriminator.trainable =False
-    #for layer in discriminator.layers:
-    #    if layer.__class__.__name__ == 'SpatialDropout2D':
-    #        layer.trainable = True
-    Generator.trainable = True
-    fullNet  = createNetwork(discriminator,Generator,dataLikelihood, hyperParam,NoiseLength,opt)
-    # initialize empty arrays to store the cost evolution
-    diskyLoss = np.zeros(epochs)
-    fitLoss = np.zeros(epochs)
-    # make an array with the epoch of the reconstruction
-    epoch = np.linspace(1,epochs,epochs)
-    #initialize the mean and variance images
-    mean = np.zeros([image_Size,image_Size])
-    variance = np.zeros([image_Size,image_Size])
-    # start tracking the amount of contributions made to the mean and variance image
-    i = 1
-    # initialize a initial random noise vector
-    theOneNoiseVector = np.random.normal(0,1,NoiseLength)
-    y_gen =[np.ones(1),np.ones(1)]
-    for e in range(1, epochs+1 ):
-        #generate  random noise as an input  to  initialize the  generator
-        noise= np.array([theOneNoiseVector])
-        hist= fullNet.train_on_batch(noise, y_gen)
-        diskyLoss[e-1] += hyperParam*(hist[1])
-        fitLoss[e-1] += (hist[2])
-        # alter the noise vector each alterationInterval, if the first contribution to the mean and var has been made
-        if (e+1) >= beginepoch and (e+1-beginepoch)%alterationInterval ==0:
-            image = Generator.predict(np.array([theOneNoiseVector for i in range(2)]))[0]
-            image = np.squeeze((image+1)/2)
-            mean, variance = updateMeanAndVariance(i,mean,variance,image)
-            i += 1
-        #plot the image after the noisevector is altered, this is the new start position for re-convergence
-        if e % plotinterval== 0 or e ==1:
-            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size,pixelSize,saveDir)
-        #plot the image contributing to the mean and variance
-        if (e+1) % plotinterval== 0:
-            plot_generated_images2(e, Generator,theOneNoiseVector,image_Size,pixelSize,saveDir)
-                #update the mean and variance 1 iteration before the noisevector is altered
-        if e >= beginepoch and e%alterationInterval ==0:
-            theOneNoiseVector = (theOneNoiseVector  + np.random.normal(0,RandomWalkStepSize,NoiseLength))/(1.+RandomWalkStepSize)
-        plt.close()
-    #plot the loss evolution
-    plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
-    #plot and store the mean and variance image
-    plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir)
-
-    return mean, variance, diskyLoss, fitLoss
 
 
 class framework:
-    def __init__(self, DataDir,filename,imageSize,pixelSize,generator,discriminator,opt,NoiseLength = 100):
+    def __init__(self, DataDir,filename,imageSize,pixelSize,generator,discriminator,opt,NoiseLength = 100,shiftPhotoCenter = True,resetOpt=True):
         self.DataDir = DataDir
         self.filename= filename
         self.imageSize = imageSize
@@ -1248,11 +1269,13 @@ class framework:
         self.generator = generator
         self.discriminator = discriminator
         self.NoiseLength = NoiseLength
-        self.opt = opt
+        self.opt =opt#opt.get_weights()
         self.useSparco = False
+        self.shiftPhotoCenter=shiftPhotoCenter
         self.V2Artificial = None
         self.CPArtificial = None
         self.fullNet = None
+        self.resetOpt = resetOpt
 
     def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter):
         self.x =x
@@ -1263,6 +1286,8 @@ class framework:
         self.dsec = dsec
         self.UDdiameter =UDdiameter
         self.useSparco = True
+        self.shiftPhotoCenter = False
+
     def useArtificialDataNP(self,V2Artificial,CPArtificial):
         self.V2Artificial = V2Artificial
         self.CPArtificial = CPArtificial
@@ -1284,15 +1309,7 @@ class framework:
         the reconstructed image for a single noise vector
 
     """
-    def SingleRun(self,Generator, discriminator,opt,dataLikelihood , pixelSize ,epochs = 250,image_Size = 128,hyperParam = 2,NoiseLength = 100,saveDir  = '',plotAtEpoch = [],loud = False,Dir =None):
-        #create the network with two cost terms
-        discriminator.trainable =False
-        #for layer in discriminator.layers:
-        #    if layer.__class__.__name__ == 'SpatialDropout2D':
-        #        layer.trainable = True
-        Generator.trainable = True
-        if self.fullNet == None:
-            self.fullNet  = createNetwork(discriminator,Generator,dataLikelihood,hyperParam,NoiseLength,opt)
+    def SingleRun(self,Generator, discriminator,dataLikelihood , pixelSize ,epochs = 250,image_Size = 128,hyperParam = 2,NoiseLength = 100,saveDir  = '',plotAtEpoch = [],loud = False,Dir =None):
         # initialize empty arrays to store the cost evolution
         diskyLoss = np.zeros(epochs)
         fitLoss = np.zeros(epochs)
@@ -1305,20 +1322,30 @@ class framework:
         theOneNoiseVector = np.random.normal(0,1,NoiseLength)
         y_gen =[np.ones(1),np.ones(1)]
         noise= np.array([theOneNoiseVector])
+        #create the network with two cost terms
+        discriminator.trainable =False
+
+        Generator.trainable = True
+
+        if self.fullNet == None:
+            opt = 'optimizers.'+self.opt['name']
+            opt = eval(opt)
+            opt = opt.from_config(self.opt)
+            self.fullNet  = createNetwork(discriminator,Generator,dataLikelihood,hyperParam,NoiseLength,opt)
+            self.fullNet.fit(noise, y_gen,epochs=1)
+            self.fullNet.get_layer(index=1).set_weights(self.generator.get_weights())
         for e in range(1, epochs+1 ):
             #generate  random noise as an input  to  initialize the  generator
             hist= self.fullNet.train_on_batch(noise, y_gen)
             diskyLoss[e-1] += hyperParam*(hist[1])
             fitLoss[e-1] += (hist[2])
-            # alter the noise vector each alterationInterval, if the first contribution to the mean and var has been made
-            if e == epochs:
-                image = self.fullNet.predict(np.array([theOneNoiseVector for i in range(2)]))[1][0]
-                mean = np.squeeze((image+1)/2)
             #plot the image at the specified epochs
             if e in plotAtEpoch:
                 plot_generated_images2(e, self.fullNet.get_layer(index=1),theOneNoiseVector,image_Size,pixelSize,saveDir)
                 plt.close()
         #plot the loss evolution
+        image = self.fullNet.predict(np.array([theOneNoiseVector for i in range(2)]))[1][0]
+        mean = np.squeeze((image+1)/2)
         if loud == True:
             plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
             #plot and store the mean and variance image
@@ -1350,8 +1377,7 @@ class framework:
         variance = np.zeros([self.imageSize,self.imageSize])
         cube = np.array([None])
         for I in range(iterations):
-            print(epochs)
-            m = self.AveragingImageReconstruction(        nrRestarts,
+            m = self.ImageReconstruction(        nrRestarts,
                                                             epochs,
                                                             hyperParam ,
                                                             plotvar,
@@ -1388,6 +1414,137 @@ class framework:
 
 
     """
+    ImageReconstruction
+
+    parameters:
+        nrRestarts: the number of times the generator is reset to its initial state
+        generator: the pre trained generator to use
+        discriminator: the pre trained discriminator to use
+        dataLikelihood: the data likelihood to use
+        epochs: the nulber of epochs for which to retrain the generator
+        image_Size: the number of pixels in the images allong one axis
+        hyperParam: the hyperparameter tuning the strength of the regularization relative to the dataLikelihood
+        NoiseLength: the length of the noisevector used as input for the generator
+        saveDir: directory to store the generator in its final state
+        plotAtEpoch: lost of epochs at which to plot the reconstructions(for one noisevector)
+        bootstrapDir additional directory to create during bootstraping iterations
+        loud: Bollean determening if extra output such as cost evolutions need to be saved
+    Returns:
+        mean: the reconstructed image (mean over noisevectors)
+        variance: the varience with respect to the input noise vector
+    """
+    def ImageReconstruction(self,nrRestarts=100,epochs = 250,hyperParam = 1, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = '',loud =False):
+        Generator = self.generator
+        if self.shiftPhotoCenter == True:
+            print('self.shiftPhotoCenter == True')
+            Generator.add(Lambda(lambda x: centerPhotocenter(x,self.imageSize)))
+        discriminator = self.discriminator
+        pixelSize = self.pixelSize
+        image_Size = self.imageSize
+        NoiseLength = self.NoiseLength
+        mean = np.zeros([image_Size,image_Size])
+        variance = np.zeros([image_Size,image_Size])
+        cubeA = np.array([None])
+        if self.useSparco == True:
+            dataLikelihood = dataLikeloss_FixedSparco(self.DataDir,
+                                            self.filename,
+                                            self.imageSize,
+                                            self.x,
+                                            self.y,
+                                            self.UDflux,
+                                            self.PointFlux,
+                                            self.denv,
+                                            self.dsec,
+                                            self.UDdiameter,
+                                            self.pixelSize,
+                                            forTraining = True,
+                                            V2Artificial = self.V2Artificial,
+                                            CPArtificial = self.CPArtificial,
+                                            bootstrap = bootstrapping
+                                            )
+        else:
+            dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
+                                    forTraining = True,V2Artificial = self.V2Artificial,CPArtificial = self.CPArtificial,
+                                    bootstrap = bootstrapping)
+        GeneratorCopy = tf.keras.models.clone_model(Generator)
+        GeneratorCopy.set_weights(Generator.get_weights())
+
+        for r in range(nrRestarts):
+            #GeneratorCopy.set_weights(Generator.get_weights())
+            if self.fullNet != None:
+                self.fullNet.get_layer(index=1).set_weights(self.generator.get_weights())
+                if self.resetOpt == True:
+                    opt = 'optimizers.'+self.opt['name']
+                    opt = eval(opt)
+                    opt = opt.from_config(self.opt)
+                    print(opt.get_config())
+                    self.fullNet.compile(loss=[adjustedCrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
+            Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
+            if not os.path.isdir(Iter_dir) and loud ==True:
+                os.makedirs(Iter_dir)
+            m, diskyLoss, fitLoss = self.SingleRun(GeneratorCopy,
+                                            discriminator,
+                                            dataLikelihood,
+                                            pixelSize,
+                                            epochs,
+                                            image_Size,
+                                            hyperParam =hyperParam,
+                                            NoiseLength = NoiseLength,
+                                            saveDir  = Iter_dir,
+                                            plotAtEpoch= plotAtEpoch,
+                                            loud = loud,
+                                            Dir = str(r)
+                                            )
+            mean, variance = updateMeanAndVariance(r+1,mean,variance,m)
+            image= np.array([m],dtype = np.float64)
+            image = image/np.sum(image)
+            if cubeA.all() == None:
+                cubeA = image
+            else:
+                cubeA = np.concatenate((cubeA,image),axis =0)
+            #del GeneratorCopy
+            K.clear_session()
+            tf.compat.v1.reset_default_graph()
+            gc.collect()
+            plt.close()
+        median = np.median(cubeA,axis = 0)
+        final_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,'meanImage'))
+        if not os.path.isdir(final_dir):
+            os.makedirs(final_dir)
+        plotMeanAndSTD(median,variance,image_Size,pixelSize,final_dir,plotVar = plotvar)
+        #If median is prefered
+        #final_median_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,'medianImage'))
+        #if not os.path.isdir(final_median_dir):
+        #    os.makedirs(final_median_dir)
+        #plotMeanAndSTD(median,variance,image_Size,pixelSize,final_median_dir,plotVar = plotvar)
+        print(cubeA.shape)
+        if bootstrapDir != '':
+            #chi2,v2,cp,fprior = self.likelihoodVal(mean,bootstrapDir)
+            if bootstrapping == True:
+                commnt = ['these chi2s are computed with regards to the NOT modified dataset']
+            else:
+                commnt = ['']
+            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            #self.toFits(mean, image_Size, pixelSize, bootstrapDir+'/'+'mean',comment = commnt,chi2s =self.likelihoodVal(mean,bootstrapDir))
+            #If median is prefered
+            #chi2,v2,cp,fprior = self.likelihoodVal(median,bootstrapDir)
+            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            self.toFits(median, image_Size, pixelSize, bootstrapDir+'/'+'median',comment = commnt,chi2s =self.likelihoodVal(median,bootstrapDir))
+            self.toFits(cubeA, image_Size, pixelSize, bootstrapDir+'/'+'ImageCube',depth =cubeA.shape[0],ctype3 ='Noise vector number')
+            np.save(os.path.join(os.getcwd(),bootstrapDir+'/'+'median') ,median)
+        else:
+            #chi2,v2,cp,fprior = self.likelihoodVal(mean)
+            #commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            #self.toFits(mean, image_Size, pixelSize, os.path.join(os.getcwd(),'mean'),chi2s =self.likelihoodVal(mean))
+            #If median is prefered
+            chi2,v2,cp,fprior = self.likelihoodVal(median)
+            commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
+            self.toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),chi2s =self.likelihoodVal(median))
+            self.toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
+            np.save(os.path.join(os.getcwd(),'median') ,median)
+        return median
+
+    """
     AveragingImageReconstruction
 
     parameters:
@@ -1408,6 +1565,11 @@ class framework:
     """
     def AveragingImageReconstruction(self,nrRestarts=100,epochs = 250,hyperParam = 1, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = '',loud =False):
         Generator = self.generator
+        #here!!!!
+        if self.shiftPhotoCenter == True:
+            print('self.shiftPhotoCenter == True')
+            Generator.add(Lambda(lambda x: centerPhotocenter(x,self.imageSize)))
+        #here!!!!
         discriminator = self.discriminator
         opt = self.opt
         pixelSize = self.pixelSize
@@ -1439,17 +1601,22 @@ class framework:
                                     bootstrap = bootstrapping)
         GeneratorCopy = tf.keras.models.clone_model(Generator)
         GeneratorCopy.set_weights(Generator.get_weights())
+
         for r in range(nrRestarts):
             #GeneratorCopy.set_weights(Generator.get_weights())
             if self.fullNet != None:
                 self.fullNet.get_layer(index=1).set_weights(self.generator.get_weights())
-                self.fullNet.compile(loss=[adjustedCrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
+                if self.resetOpt == True:
+                    opt = 'optimizers.'+self.opt['name']
+                    opt = eval(opt)
+                    opt = opt.from_config(self.opt)
+                    print(opt.get_config())
+                    self.fullNet.compile(loss=[adjustedCrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
             Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
             if not os.path.isdir(Iter_dir) and loud ==True:
                 os.makedirs(Iter_dir)
             m, diskyLoss, fitLoss = self.SingleRun(GeneratorCopy,
                                             discriminator,
-                                            opt,
                                             dataLikelihood,
                                             pixelSize,
                                             epochs,
@@ -1507,17 +1674,20 @@ class framework:
             commnt = ['the total reduced chi squared:'+str(chi2),'the squared visibility reduced chi squared:'+str(v2),'the closure phase reduced chi squared:'+str(cp),'The f prior value:'+str(fprior)]
             self.toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),chi2s =self.likelihoodVal(median))
             self.toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
+            np.save(os.path.join(os.getcwd(),'median') ,median)
         return median
+
 
     """
     runGrid
 
     parameters:
-        nrRestarts = []
-        epochs=[]
-        mus = []
-        **kwargs
-    effect: Runs AveragingImageReconstruction for all combinations of the given paramters
+        nrRestarts: list with the amounts of restrarts for which to run the grid
+        epochs: list with the number of epochs to use in differetn runs of the grid
+        mus: list with the values of hyperparameter for which to run the grid
+        **kwargs: lists of other parameters to alter during the runs of the grid.
+                  these can be the sparco parameters and pixelsize
+    effect: Runs ImageReconstruction for all combinations of the given parameters.
     """
     def runGrid(self,nrRestarts = [],epochs=[],mus = [],**kwargs):
         pixelSizes = [self.pixelSize]
@@ -1617,7 +1787,7 @@ class framework:
                                                         elif key == 'UDdiameter':
                                                             dir = dir +'udD'+ str(UDdiameter) +'_'
                                                     dir = dir[:-1]
-                                                    mean = self.AveragingImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
+                                                    mean = self.ImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
         self.setSparco(xold,yold,UDfluxold,PointFluxold,denvold,dsecold,UDdiameterold)
         pixelSizesold = self.pixelSize
 
@@ -1669,6 +1839,27 @@ class framework:
         fprior = -np.log(score)
         return lossValue.numpy(), V2loss.numpy()[0] , CPloss.numpy()[0], fprior[0][0]
 
+
+    """
+    toFits
+
+    parameters:
+        self: an instance of framework
+        Image:Image to save in the fits file format
+        imageSize: number of pixels along one axis of the image
+        pixelSize: Angular size of one pixel
+        Name: Name under which the image will be stored
+        comment:comment to be written in the fits header
+        chi2s: list containing the total reduced chi squared, the reduced chi squared for the squared visibilities, the reduced chi squared for the closure phases')
+        depth: the number of images in an image cube if one is created
+        ctype3: the datatype that is in the third axis of the image cube
+    Returns:
+        lossValue: the total "reduced" chi2
+        V2loss: the "reduced" chi2 for the squared visibilities
+        CPloss: the "reduced" chi2 for the closure phases
+        fprior: the value of the regularization term fprior
+    effect: prints a comparison between the observed and reconstructed V2 and CP
+    """
     def toFits(self, Image,imageSize,pixelSize,Name,comment= [''],chi2s =None, depth = None,ctype3 ='' ):
         header = fits.Header()
         header['SIMPLE'] = 'T'
@@ -1697,9 +1888,9 @@ class framework:
         if self.useSparco == True:
             header['x'] = (self.x,'x coordinate of the point source')
             header['y']= (self.y ,'coordinate of the point source')
-            header['UDflux'] = self.UDflux ,'flux contribution of the uniform disk'
-            header['UDdiameter'] = (self.UDdiameter, 'diameter of the point source')
-            header['PointFlux'] = (self.PointFlux,'flux contribution of the point source')
+            header['UDf'] = self.UDflux ,'flux contribution of the uniform disk'
+            header['UDd'] = (self.UDdiameter, 'diameter of the point source')
+            header['pf'] = (self.PointFlux,'flux contribution of the point source')
             header['denv'] = (self.denv,'spectral index of the environment')
             header['dsec'] = (self.dsec,'spectral index of the point source')
         if chi2s != None:
