@@ -493,46 +493,22 @@ bootstrapDir =None
 
     #plots a comperison between observations and observables of the reconstruction,aswell as the uv coverage
     def plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr):
-        #v2 with residual comparison
-        plt.figure(figsize=(3.5, 6))
-        maskv2 = V2err < 0.5
-        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
-        ax1=plt.subplot(gs[0]) # sharex=True)
-        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
-        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=30,label = 'image',c = np.real(wavelV2.numpy())[maskv2],cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.scatter(absB,V2observed[maskv2],marker='*',s=30,label = 'observed',cmap ='rainbow',c = np.real(wavelV2.numpy())[maskv2],alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='k')
-        plt.ylim(0,1)
-        plt.ylabel(r'$V^2$')
-        plt.legend()
-
-        plt.setp(ax1.get_xticklabels(), visible=False)
-        plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = np.real(wavelV2)[maskv2],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors ='k',linewidth=0.15)
-        plt.ylabel(r'residuals',fontsize =12)
-        plt.xlabel(r'$\mid B\mid (M\lambda)$')
-        plt.tight_layout()
-        if bootstrapDir == None:
-            plt.savefig(os.path.join(os.getcwd(),'V2comparison.png'))
-        else:
-            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparison.png'))
 
         #v2 with residual comparison, no colors indicating wavelength
         plt.figure(figsize=(3.5, 6))
-        maskv2 = V2err < 0.5
         gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
         ax1=plt.subplot(gs[0]) # sharex=True)
-        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
-        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=40,label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.scatter(absB,V2observed[maskv2],marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='r')
+        absB = (np.sqrt(u**2+v**2)/(10**6))
+        plt.scatter(absB,V2generated[0].numpy(),marker='.',s=40,label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(absB,V2observed,marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(absB,V2observed,V2err,elinewidth=0.2,ls='none',c ='r')
         plt.ylim(0,1)
         plt.ylabel(r'$V^2$')
         plt.legend()
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
         plt.ylabel(r'residuals',fontsize =12)
         plt.xlabel(r'$\mid B\mid (M\lambda)$')
         plt.tight_layout()
@@ -553,48 +529,21 @@ bootstrapDir =None
             plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/uvCoverage.png'))
 
 
-        #cp with residual comparison
-        plt.figure(figsize=(3.5, 6))
-        maskcp = CPerr < 10.0
-        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
-        ax1=plt.subplot(gs[0]) # sharex=True)
-        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
-        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',cmap ='rainbow',c = np.real(wavelCP.numpy())[maskcp],alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='k')
-        plt.legend()
-        plt.ylabel(r'closure phase(radian)',fontsize =12)
-
-        plt.setp(ax1.get_xticklabels(), visible=False)
-        plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = np.real(wavelCP)[maskcp],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors=colors.to_rgba('k', 0.1), linewidth=0.15)
-        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
-        #c[0].set_color(color)
-
-        plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
-        plt.ylabel(r'residuals',fontsize =12)
-        plt.tight_layout()
-        if bootstrapDir == None:
-            plt.savefig(os.path.join(os.getcwd(), 'cpComparison.png'))
-        else:
-            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparison.png'))
-
         #cp with residual comparison without color indicating wavelength
         plt.figure(figsize=(3.5, 6))
-        maskcp = CPerr < 10.0
         gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
         ax1=plt.subplot(gs[0]) # sharex=True)
-        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
-        plt.scatter(maxB,CPgenerated[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
-        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
-        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='r')
+        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))
+        plt.scatter(maxB,CPgenerated[0].numpy(),s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.scatter(maxB,CPobserved,s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.errorbar(maxB,CPobserved,CPerr,ls='none',elinewidth=0.2,c ='r')
         plt.legend()
         plt.ylabel(r'closure phase(radian)',fontsize =12)
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
-        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
+        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr)),s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        #color = colors.to_rgba(np.real(wavelCP.numpy())[], alpha=None) #color = clb.to_rgba(waveV2[])
         #c[0].set_color(color)
 
         plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
@@ -727,46 +676,22 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         return interpValues
 
     def plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr):
-        #v2 with residual comparison
-        plt.figure(figsize=(3.5, 6))
-        maskv2 = V2err < 0.5
-        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
-        ax1=plt.subplot(gs[0]) # sharex=True)
-        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
-        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=30,label = 'image',c = np.real(wavelV2.numpy())[maskv2],cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.scatter(absB,V2observed[maskv2],marker='*',s=30,label = 'observed',cmap ='rainbow',c = np.real(wavelV2.numpy())[maskv2],alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='k')
-        plt.ylim(0,1)
-        plt.ylabel(r'$V^2$')
-        plt.legend()
-
-        plt.setp(ax1.get_xticklabels(), visible=False)
-        plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = np.real(wavelV2)[maskv2],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors ='k',linewidth=0.15)
-        plt.ylabel(r'residuals',fontsize =12)
-        plt.xlabel(r'$\mid B\mid (M\lambda)$')
-        plt.tight_layout()
-        if bootstrapDir == None:
-            plt.savefig(os.path.join(os.getcwd(),'V2comparison.png'))
-        else:
-            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparison.png'))
 
         #v2 with residual comparison, no colors indicating wavelength
         plt.figure(figsize=(3.5, 6))
-        maskv2 = V2err < 0.5
         gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
         ax1=plt.subplot(gs[0]) # sharex=True)
-        absB = (np.sqrt(u**2+v**2)/(10**6))[maskv2]
-        plt.scatter(absB,V2generated[0].numpy()[maskv2],marker='.',s=40,label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.scatter(absB,V2observed[maskv2],marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.errorbar(absB,V2observed[maskv2],V2err[maskv2],elinewidth=0.2,ls='none',c ='r')
+        absB = (np.sqrt(u**2+v**2)/(10**6))
+        plt.scatter(absB,V2generated[0].numpy(),marker='.',s=40,label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.scatter(absB,V2observed,marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
+        plt.errorbar(absB,V2observed,V2err,elinewidth=0.2,ls='none',c ='r')
         plt.ylim(0,1)
         plt.ylabel(r'$V^2$')
         plt.legend()
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err))[maskv2],s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
         plt.ylabel(r'residuals',fontsize =12)
         plt.xlabel(r'$\mid B\mid (M\lambda)$')
         plt.tight_layout()
@@ -788,53 +713,24 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
 
 
         #cp with residual comparison
-        plt.figure(figsize=(3.5, 6))
-        maskcp = CPerr < 10.0
-        gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
-        ax1=plt.subplot(gs[0]) # sharex=True)
         cpWrapped = tf.math.atan2(tf.math.sin(CPgenerated),tf.math.cos(CPgenerated))
-        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
-        plt.scatter(maxB,CPobserved[maskcp],s=15,marker='*',label = 'observed',cmap ='rainbow',c = np.real(wavelCP.numpy())[maskcp],alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='k')
-        plt.scatter(maxB,cpWrapped[0].numpy()[maskcp],s=30,marker='.',c = np.real(wavelCP.numpy())[maskcp],label = 'image',cmap ='rainbow',alpha=0.4,edgecolors ='k',linewidth=0.15)
-        plt.legend()
-        plt.ylabel(r'closure phase(radian)',fontsize =12)
 
-        plt.setp(ax1.get_xticklabels(), visible=False)
-        plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(maxB,((CPobserved-cpWrapped[0].numpy())/(CPerr))[maskcp],s=30,marker='.',c = np.real(wavelCP)[maskcp],label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors=colors.to_rgba('k', 0.1), linewidth=0.15)
-        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
-        #c[0].set_color(color)
-
-        plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
-        plt.ylabel(r'residuals',fontsize =12)
-        plt.tight_layout()
-        if bootstrapDir == None:
-            plt.savefig(os.path.join(os.getcwd(), 'cpComparison.png'))
-        else:
-            plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparison.png'))
 
         #cp with residual comparison without color indicating wavelength
         plt.figure(figsize=(3.5, 6))
-        maskcp = CPerr < 10.0
         gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
         ax1=plt.subplot(gs[0]) # sharex=True)
-        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))[maskcp]
-        plt.scatter(maxB,CPobserved[maskcp],s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
-        plt.errorbar(maxB,CPobserved[maskcp],CPerr[maskcp],ls='none',elinewidth=0.2,c ='r')
-        plt.scatter(maxB,cpWrapped[0].numpy()[maskcp],s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))
+        plt.scatter(maxB,CPobserved,s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.errorbar(maxB,CPobserved,CPerr,ls='none',elinewidth=0.2,c ='r')
+        plt.scatter(maxB,cpWrapped[0].numpy(),s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         plt.legend()
         plt.ylabel(r'closure phase(radian)',fontsize =12)
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        res = (((CPobserved-cpWrapped[0].numpy())%(np.sign(CPobserved-cpWrapped[0].numpy())*np.pi))/(CPerr))[maskcp]
-        print(np.max(((CPobserved-cpWrapped[0].numpy())%(np.sign(CPobserved-cpWrapped[0].numpy())*np.pi))))
-        print(np.min(((CPobserved-cpWrapped[0].numpy())%(np.sign(CPobserved-cpWrapped[0].numpy())*np.pi))))
+        res = tf.math.atan2(tf.math.sin(CPobserved-cpWrapped[0].numpy()),tf.math.cos(CPobserved-cpWrapped[0].numpy()))/CPerr
         plt.scatter(maxB,res,s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
-        #color = colors.to_rgba(np.real(wavelCP.numpy())[maskcp], alpha=None) #color = clb.to_rgba(waveV2[maskv2])
-        #c[0].set_color(color)
-        #plt.yscale('log')
         plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
         plt.ylabel(r'residuals',fontsize =12)
         plt.tight_layout()
@@ -1435,9 +1331,7 @@ class framework:
     """
     def ImageReconstruction(self,nrRestarts=100,epochs = 250,hyperParam = 1, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = '',loud =False):
         Generator = self.generator
-        if self.shiftPhotoCenter == True:
-            print('self.shiftPhotoCenter == True')
-            Generator.add(Lambda(lambda x: centerPhotocenter(x,self.imageSize)))
+
         discriminator = self.discriminator
         pixelSize = self.pixelSize
         image_Size = self.imageSize
@@ -1468,7 +1362,8 @@ class framework:
                                     bootstrap = bootstrapping)
         GeneratorCopy = tf.keras.models.clone_model(Generator)
         GeneratorCopy.set_weights(Generator.get_weights())
-
+        if self.shiftPhotoCenter == True:
+            GeneratorCopy.add(Lambda(lambda x: centerPhotocenter(x,self.imageSize)))
         for r in range(nrRestarts):
             #GeneratorCopy.set_weights(Generator.get_weights())
             if self.fullNet != None:
