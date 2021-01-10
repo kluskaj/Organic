@@ -1590,74 +1590,92 @@ class framework:
             if key == 'pixelSize':
                 pixelSizes =values
             elif key == 'x':
+                assert(self.useSparco == True)
                 xs = values
-                self.useSparco = True
             elif key == 'y':
+                assert(self.useSparco == True)
                 ys = values
-                self.useSparco = True
             elif key == 'UDflux':
+                assert(self.useSparco == True)
                 UDfluxs = values
-                self.useSparco = True
             elif key == 'PointFlux':
+                assert(self.useSparco == True)
                 PointFluxs = values
-                self.useSparco = True
             elif key == 'denv':
+                assert(self.useSparco == True)
                 denvs = values
-                self.useSparco = True
             elif key == 'dsec':
+                assert(self.useSparco == True)
                 dsecs = values
-                self.useSparco = True
             elif key == 'UDdiameter':
+                assert(self.useSparco == True)
                 UDdiameters = values
-                self.useSparco = True
             else: raise KeyError('Invalid keywords argument')
+        print('here!!!')
         for nrRestart in nrRestarts:
             for epoch in epochs:
                 for pixelSize in pixelSizes:
                     self.pixelSize = pixelSize
                     for mu in mus:
-                        for x in xs:
-                            self.x = x
-                            for y in ys:
-                                self.y = y
-                                for UDflux in UDfluxs:
-                                    self.UDflux = UDflux
-                                    for PointFlux in PointFluxs:
-                                        self.PointFlux = PointFlux
-                                        for denv in denvs:
-                                            self.denv = denv
-                                            for dsec in dsecs:
-                                                self.dsec = dsec
-                                                for UDdiameter in UDdiameters:
-                                                    self.UDdiameter = UDdiameter
-                                                    dir = ''
-                                                    if len(nrRestarts)>1:
-                                                        dir =dir+'nR'+str(nrRestart)+'_'
-                                                    if len(mus)>1:
-                                                        dir =dir+ 'mu'+str(mu)+'_'
-                                                    if len(epochs)>1:
-                                                        dir = dir + 'ep'+str(epoch) +'_'
-                                                    for key, values in kwargs.items():
-                                                        if key == 'pixelSize':
-                                                            dir = dir +'pS'+ str(pixelSize) +'_'
-                                                        elif key == 'x':
-                                                            dir = dir +'x'+ str(x) +'_'
-                                                        elif key == 'y':
-                                                            dir = dir +'y'+ str(y) +'_'
-                                                        elif key == 'UDflux':
-                                                            dir = dir + 'udF'+str(UDflux) +'_'
-                                                        elif key == 'PointFlux':
-                                                            dir = dir +'pF'+ str(PointFlux) +'_'
-                                                        elif key == 'denv':
-                                                            dir = dir +'de'+ str(denv) +'_'
-                                                        elif key == 'dsec':
-                                                            dir = dir +'ds'+ str(dsec) +'_'
-                                                        elif key == 'UDdiameter':
-                                                            dir = dir +'udD'+ str(UDdiameter) +'_'
-                                                    dir = dir[:-1]
-                                                    mean = self.ImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
-        self.setSparco(xold,yold,UDfluxold,PointFluxold,denvold,dsecold,UDdiameterold)
-        pixelSizesold = self.pixelSize
+                        if self.useSparco == True:
+                            for x in xs:
+                                self.x = x
+                                for y in ys:
+                                    self.y = y
+                                    for UDflux in UDfluxs:
+                                        self.UDflux = UDflux
+                                        for PointFlux in PointFluxs:
+                                            self.PointFlux = PointFlux
+                                            for denv in denvs:
+                                                self.denv = denv
+                                                for dsec in dsecs:
+                                                    self.dsec = dsec
+                                                    for UDdiameter in UDdiameters:
+                                                        self.UDdiameter = UDdiameter
+                                                        dir = ''
+                                                        if len(nrRestarts)>1:
+                                                            dir =dir+'nR'+str(nrRestart)+'_'
+                                                        if len(mus)>1:
+                                                            dir =dir+ 'mu'+str(mu)+'_'
+                                                        if len(epochs)>1:
+                                                            dir = dir + 'ep'+str(epoch) +'_'
+                                                        for key, values in kwargs.items():
+                                                            if key == 'pixelSize':
+                                                                dir = dir +'pS'+ str(pixelSize) +'_'
+                                                            elif key == 'x':
+                                                                dir = dir +'x'+ str(x) +'_'
+                                                            elif key == 'y':
+                                                                dir = dir +'y'+ str(y) +'_'
+                                                            elif key == 'UDflux':
+                                                                dir = dir + 'udF'+str(UDflux) +'_'
+                                                            elif key == 'PointFlux':
+                                                                dir = dir +'pF'+ str(PointFlux) +'_'
+                                                            elif key == 'denv':
+                                                                dir = dir +'de'+ str(denv) +'_'
+                                                            elif key == 'dsec':
+                                                                dir = dir +'ds'+ str(dsec) +'_'
+                                                            elif key == 'UDdiameter':
+                                                                dir = dir +'udD'+ str(UDdiameter) +'_'
+                                                        dir = dir[:-1]
+                                                        print(dir)
+                                                        mean = self.ImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
+                        else:
+                            dir = ''
+                            if len(nrRestarts)>1:
+                                dir =dir+'nR'+str(nrRestart)+'_'
+                            if len(mus)>1:
+                                dir =dir+ 'mu'+str(mu)+'_'
+                            if len(epochs)>1:
+                                dir = dir + 'ep'+str(epoch) +'_'
+                            for key, values in kwargs.items():
+                                if key == 'pixelSize':
+                                    dir = dir +'pS'+ str(pixelSize) +'_'
+                            dir = dir[:-1]
+                            print(dir)
+                            mean = self.ImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
+        if self.useSparco==True:
+            self.setSparco(xold,yold,UDfluxold,PointFluxold,denvold,dsecold,UDdiameterold)
+        self.pixelSize = pixelSizesold
 
 
     """
