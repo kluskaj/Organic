@@ -151,8 +151,6 @@ def load_data_fromCube(dir,imagesize):
         images = np.concatenate([images, image]) #add the rescaled image to the array
     # normalize to [-1,+1]
     images = (images-0.5)*2
-    print('images')
-    print(images.shape)
     return images
 """
 plot_generated_images
@@ -859,17 +857,6 @@ def centerPhotocenter(image,imageSize):
 
 
     image = tfa.image.translate(image,[[centre_of_mass[0,1],centre_of_mass[0,0]]],interpolation = 'BILINEAR')#,interpolation = 'NEAREST')#
-
-    print('centeringPhotocenter')
-    #printing cm after shift
-    #volumes_flat = tf.reshape(image, [-1, imageSize * imageSize , 1])
-    #Compute total mass for each volume
-    #total_mass = tf.reduce_sum(volumes_flat, axis=1)
-    #Compute centre of mass
-    #centre_of_mass = tf.reduce_sum(volumes_flat * coords, axis=1) / total_mass
-    #centre_of_mass = centre_of_mass-((imageSize-1)/2)
-
-    #tf.print("post shift:",centre_of_mass)
     return (image-0.5)*2
 
 
@@ -1240,13 +1227,13 @@ class framework:
                 plot_generated_images2(e, self.fullNet.get_layer(index=1),theOneNoiseVector,image_Size,pixelSize,saveDir)
                 plt.close()
         #plot the loss evolution
-        image = self.fullNet.predict(np.array([theOneNoiseVector for i in range(2)]))[1][0]
-        mean = np.squeeze((image+1)/2)
+        image = self.fullNet.predict_on_batch(np.array([theOneNoiseVector for i in range(2)]))[1][0] #!!!!!!!!!!!here!!!!!!!!!!!!!!!
+        im = np.squeeze((image+1)/2)
         if loud == True:
             plotEvolution(epoch,hyperParam,diskyLoss,fitLoss,saveDir)
             #plot and store the mean and variance image
-            plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir)
-        return mean, diskyLoss, fitLoss
+            plotMeanAndSTD(im,variance,image_Size,pixelSize,saveDir)
+        return im, diskyLoss, fitLoss
     """
     bootstrappingReconstr
 
@@ -1331,7 +1318,6 @@ class framework:
     """
     def ImageReconstruction(self,nrRestarts=100,epochs = 250,hyperParam = 1, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = '',loud =False):
         Generator = self.generator
-
         discriminator = self.discriminator
         pixelSize = self.pixelSize
         image_Size = self.imageSize
@@ -1411,7 +1397,6 @@ class framework:
         #if not os.path.isdir(final_median_dir):
         #    os.makedirs(final_median_dir)
         #plotMeanAndSTD(median,variance,image_Size,pixelSize,final_median_dir,plotVar = plotvar)
-        print(cubeA.shape)
         if bootstrapDir != '':
             #chi2,v2,cp,fprior = self.likelihoodVal(mean,bootstrapDir)
             if bootstrapping == True:
@@ -1436,6 +1421,12 @@ class framework:
             self.toFits(median, image_Size, pixelSize, os.path.join(os.getcwd(),'median'),chi2s =self.likelihoodVal(median))
             self.toFits(cubeA, image_Size, pixelSize, os.path.join(os.getcwd(),'ImageCube'),depth =cubeA.shape[0],ctype3 ='Noise vector number')
             np.save(os.path.join(os.getcwd(),'median') ,median)
+        del GeneratorCopy
+        del self.fullNet
+        self.fullNet = None
+        K.clear_session()
+        tf.compat.v1.reset_default_graph()
+        gc.collect()
         return median
 
 
@@ -1481,7 +1472,6 @@ class framework:
              UDdiameters=[]
 
         for key, values in kwargs.items():
-            print(key)
             if key == 'pixelSize':
                 pixelSizes =values
             elif key == 'x':
@@ -1506,7 +1496,6 @@ class framework:
                 assert(self.useSparco == True)
                 UDdiameters = values
             else: raise KeyError('Invalid keywords argument')
-        print('here!!!')
         for nrRestart in nrRestarts:
             for epoch in epochs:
                 for pixelSize in pixelSizes:
