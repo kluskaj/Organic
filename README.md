@@ -37,5 +37,7 @@ To use the right environment type:
 ```
 conda env create --file organic.yml
 ```
-
+A number of pre-trained GAN are available.
+- **theGANextended2**
+- **GANspirals**
 
