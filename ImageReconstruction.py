@@ -61,6 +61,7 @@ PointFlux = 0#3.9#43.5# # The flux contribution of a point source star, in perce
 denv = 0.42#1.73# # the spectral index of the environment
 dsec = -2#-4 # #  the spectral index of the point source star (the uniform disk source has a default index of -4)
 UDdiameter = 0.5# # the diameter of the resolved source
+wavel0 = 1.65-6  # The reference wavelength for sparco
 
 
 
@@ -74,10 +75,10 @@ UDdiameter = 0.5# # the diameter of the resolved source
 reconstr = framework(DataDir,filename,image_Size,pixelSize,Generator,discriminator,optimizer,NoiseLength,resetOpt)
 
 #set the parameters for the
-#reconstr.setSparco(x,y,UDflux,PointFlux,denv,dsec,UDdiameter)
+reconstr.setSparco(x,y,UDflux,PointFlux,denv,dsec,UDdiameter,wavel0)
 
 #use this to use artificial V2 and CP from numpy arrays
-reconstr.useArtificialDataNP(simV2,simCP)
+#reconstr.useArtificialDataNP(simV2,simCP)
 
 #Run this line for a single image reconstruction
 median = reconstr.ImageReconstruction(numberOfRestarts,epochs,hyperParam=hyperParam,plotAtEpoch = [1],loud=True)

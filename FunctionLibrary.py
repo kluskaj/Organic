@@ -405,6 +405,7 @@ parameters:
     forTraining: wether or not this instance of the dataLikelihood is to be used for training(True) or for calculating the chi2 (False)
     V2Artificial: numpy array holding the squared visibilities when using artificial dataset
     CPArtificial: numpy array holding the closure phases when using artificial dataset
+    wavel0: the reference wavelength for sparco
 returns:
     data likelihood cost function for the provided data
 
@@ -422,7 +423,8 @@ forTraining = True,
 V2Artificial = None,
 CPArtificial = None,
 bootstrap = False,
-bootstrapDir =None
+bootstrapDir =None,
+wavel0 = 1.65e-6
         ):
     data = oi.read(DataDir,filename)
     dataObj = data.givedataJK()
@@ -451,7 +453,6 @@ bootstrapDir =None
     if bootstrap == True:
         u, u1, u2, u3 = u[V2selection], u1[CPselection], u2[CPselection], u3[CPselection]
         v, v1, v2, v3 = v[V2selection], v1[CPselection], v2[CPselection], v3[CPselection]
-    wavel0 = 1.65 *10**(-6)
     wavelV2 = dataObj['wave'][0]
     wavelCP = dataObj['wave'][1]
     if bootstrap == True:
@@ -647,7 +648,6 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
     if bootstrap == True:
         u, u1, u2, u3 = u[V2selection], u1[CPselection], u2[CPselection], u3[CPselection]
         v, v1, v2, v3 = v[V2selection], v1[CPselection], v2[CPselection], v3[CPselection]
-    wavel0 = 1.65 *10**(-6)
     wavelV2 = dataObj['wave'][0]
     wavelCP = dataObj['wave'][1]
     if bootstrap == True:
@@ -1160,7 +1160,7 @@ class framework:
         self.fullNet = None
         self.resetOpt = resetOpt
 
-    def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter):
+    def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter,wavel0):
         self.x =x
         self.y =y
         self.UDflux = UDflux
@@ -1170,6 +1170,7 @@ class framework:
         self.UDdiameter =UDdiameter
         self.useSparco = True
         self.shiftPhotoCenter = False
+        self.wavel0 = wavel0
 
     def useArtificialDataNP(self,V2Artificial,CPArtificial):
         self.V2Artificial = V2Artificial
@@ -1325,6 +1326,7 @@ class framework:
         mean = np.zeros([image_Size,image_Size])
         variance = np.zeros([image_Size,image_Size])
         cubeA = np.array([None])
+        wavel0 = self.wavel0
         if self.useSparco == True:
             dataLikelihood = dataLikeloss_FixedSparco(self.DataDir,
                                             self.filename,
@@ -1341,6 +1343,7 @@ class framework:
                                             V2Artificial = self.V2Artificial,
                                             CPArtificial = self.CPArtificial,
                                             bootstrap = bootstrapping
+                                            wavel0 = self.wavel0
                                             )
         else:
             dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
@@ -1558,7 +1561,7 @@ class framework:
                             print(dir)
                             mean = self.ImageReconstruction(nrRestart,epoch,mu, plotvar = False,plotAtEpoch = [],bootstrapping = False,bootstrapDir = dir,loud =False)
         if self.useSparco==True:
-            self.setSparco(xold,yold,UDfluxold,PointFluxold,denvold,dsecold,UDdiameterold)
+            self.setSparco(xold,yold,UDfluxold,PointFluxold,denvold,dsecold,UDdiameterold,wavel0)
         self.pixelSize = pixelSizesold
 
 
