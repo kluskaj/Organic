@@ -38,6 +38,7 @@ To use the right environment type:
 conda env create --file organic.yml
 ```
 A number of pre-trained GAN are available.
-- **theGANextended2**
-- **GANspirals**
+- **theGANextended2** MCMax model circumstellar disks with extended component /data/leuven/334/vsc33405/summerjobTests/GANspirals/saved_models
+- **GANspirals** geometrical pinwheel nebula models /data/leuven/334/vsc33405/summerjobTests/GANspirals/saved_models
+- **GANstellarSurf** Stellar surface models /data/leuven/334/vsc33405/summerjobTests/GANstellarSurf/saved_models
 
