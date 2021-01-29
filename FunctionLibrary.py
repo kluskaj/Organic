@@ -1342,7 +1342,7 @@ class framework:
                                             forTraining = True,
                                             V2Artificial = self.V2Artificial,
                                             CPArtificial = self.CPArtificial,
-                                            bootstrap = bootstrapping
+                                            bootstrap = bootstrapping,
                                             wavel0 = self.wavel0
                                             )
         else:
