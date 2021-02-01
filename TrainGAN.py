@@ -28,7 +28,8 @@ PlotEpochs = 25 #Epoch interval after which examples of generated images are sto
 Use1sidedLabelSmooth = False #whether or not one side label smoothning is applied during training
 saveEpochs = [] #epochs(integers) at which to save the network
 OverTrainDiscr = 1 # the amount the discriminator is trained more than the generator in each epoch (if 2 the discriminator will be trained for twice the total dataset in an epoch)
-optimizer = Adam(lr=0.0002, beta_1=0.5) #the optimizer used during training.
+def getOptimizer():
+    return Adam(lr=0.0002, beta_1=0.5) #the optimizer used during training.
 ################################################################################
 ############################### directories ####################################
 ################################################################################
@@ -86,7 +87,7 @@ def create_generator():
 
 
 
-    generator.compile(loss='binary_crossentropy', optimizer=optimizer)
+    generator.compile(loss='binary_crossentropy', optimizer=getOptimizer())
     return generator
 
 #
@@ -118,7 +119,7 @@ def create_discriminator():
     disc.add(layers.Flatten())
     disc.add(layers.Dense(1,activation='sigmoid', use_bias=False,kernel_initializer='glorot_normal'))
 
-    disc.compile(loss='binary_crossentropy',optimizer=optimizer,metrics=["accuracy"])
+    disc.compile(loss='binary_crossentropy',optimizer=getOptimizer(),metrics=["accuracy"])
     return disc
 
 
@@ -169,7 +170,7 @@ print(dis.summary())
 ###################### perform  training #######################################
 ################################################################################
 lib.classicalGANtraining(create_generator(),create_discriminator(), #A compiled generator network # A compiled discriminator network
-        optimizer,
+        getOptimizer(),
         data_Dir,
         image_Size,
         NoiseLength,
