@@ -791,11 +791,8 @@ returns:
     binary binary_crossentropy loss function
 
 """
-def adjustedCrossEntropy(y_true,y_pred):
-    #mask = K.cast(K.less(0.95,K.mean(y_pred)), K.floatx())
-    return K.binary_crossentropy(y_true, y_pred, from_logits=False) #+ mask*(80*(K.mean(y_pred)-0.95))**2
-    #return tf.keras.losses.MeanSquaredError()(y_true, y_pred)
-
+def CrossEntropy(y_true,y_pred):
+    return K.binary_crossentropy(y_true, y_pred, from_logits=False) 
 """
 createNetwork
 
@@ -814,7 +811,7 @@ def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength
     gan_output= discriminator(x)
     gan= Model(inputs=noise_input, outputs=[gan_output,x])
     #losses are reversed compared to paper!
-    losses = [adjustedCrossEntropy ,dataLikelihood]
+    losses = [CrossEntropy ,dataLikelihood]
     gan.compile(loss=losses,optimizer= opt,loss_weights=[hyperParam,1])
     discriminator.trainable = False
     return gan
@@ -1361,7 +1358,7 @@ class framework:
                     opt = 'optimizers.'+self.opt['name']
                     opt = eval(opt)
                     opt = opt.from_config(self.opt)
-                    self.fullNet.compile(loss=[adjustedCrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
+                    self.fullNet.compile(loss=[CrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
             Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
             if not os.path.isdir(Iter_dir) and loud ==True:
                 os.makedirs(Iter_dir)
