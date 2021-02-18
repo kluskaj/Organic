@@ -507,7 +507,7 @@ wavel0 = 1.65e-6
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',alpha=0.6,edgecolors ='k',linewidth=0.1)
         plt.ylabel(r'residuals',fontsize =12)
         plt.xlabel(r'$\mid B\mid (M\lambda)$')
         plt.tight_layout()
@@ -541,7 +541,7 @@ wavel0 = 1.65e-6
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr)),s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr)),s=30,marker='.',c = 'b',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         #color = colors.to_rgba(np.real(wavelCP.numpy())[], alpha=None) #color = clb.to_rgba(waveV2[])
         #c[0].set_color(color)
 
@@ -689,7 +689,7 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
 
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
-        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',label = 'perfect data',alpha=0.6,edgecolors ='k',linewidth=0.1)
+        plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',alpha=0.6,edgecolors ='k',linewidth=0.1)
         plt.ylabel(r'residuals',fontsize =12)
         plt.xlabel(r'$\mid B\mid (M\lambda)$')
         plt.tight_layout()
@@ -728,7 +728,7 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         plt.setp(ax1.get_xticklabels(), visible=False)
         plt.subplot(gs[1], sharex=ax1)
         res = tf.math.atan2(tf.math.sin(CPobserved-cpWrapped[0].numpy()),tf.math.cos(CPobserved-cpWrapped[0].numpy()))/CPerr
-        plt.scatter(maxB,res,s=30,marker='.',c = 'b',label = 'perfect data',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+        plt.scatter(maxB,res,s=30,marker='.',c = 'b',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
         plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
         plt.ylabel(r'residuals',fontsize =12)
         plt.tight_layout()
