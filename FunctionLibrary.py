@@ -424,7 +424,8 @@ V2Artificial = None,
 CPArtificial = None,
 bootstrap = False,
 bootstrapDir =None,
-wavel0 = 1.65e-6
+wavel0 = 1.65e-6,
+useLowCPapprox = False
         ):
     data = oi.read(DataDir,filename)
     dataObj = data.givedataJK()
@@ -588,7 +589,10 @@ wavel0 = 1.65e-6
         CPgenerated  = tf.math.angle(compTotalCompVis(ftImages,u1,v1,wavelCP))
         CPgenerated += tf.math.angle(compTotalCompVis(ftImages,u2,v2,wavelCP))
         CPgenerated -= tf.math.angle(compTotalCompVis(ftImages,u3,v3,wavelCP))
-        CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
+        CPchi2Terms = 2*(1-tf.math.cos(CPobserved-CPgenerated))/(K.pow(CPerr,2)*nCP)
+        if useLowCPapprox == True:
+            CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
+
         CPloss = K.sum(CPchi2Terms,axis=1)
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
@@ -763,14 +767,8 @@ def dataLikeloss_NoSparco(DataDir,filename,ImageSize,pixelSize,forTraining = Tru
         CPgenerated += tf.math.angle(complV2)
         complV3  = bilinearInterp(ftImages,(v3/spacialFreqPerPixel)+int(ImageSize/2),(u3/spacialFreqPerPixel)+int(ImageSize/2))
         CPgenerated -= tf.math.angle(complV3)
-        #DiffComplexPhasors = tf.math.abs(tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPobserved),CPobserved))- tf.math.exp(tf.dtypes.complex(tf.zeros_like(CPgenerated),CPgenerated)))
-        #CPchi2Terms= K.pow(DiffComplexPhasors,2)/(K.pow(CPerr,2)*nCP)
         CPchi2Terms = 2*(1-tf.math.cos(CPobserved-CPgenerated))/(K.pow(CPerr,2)*nCP)
-        #CPchi2Terms = K.pow(tf.math.atan2(tf.math.sin(CPobserved-CPgenerated),tf.math.cos(CPobserved-CPgenerated)),2)/(K.pow(CPerr,2)*nCP)
-        #CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
-        #CPchi2Terms = (CPobserved-CPgenerated)-2*np.pi*tf.math.floor((CPobserved-CPgenerated)/(2*np.pi)+0.5)
-        #CPchi2Terms= K.pow(CPchi2Terms,2)/(K.pow(CPerr,2)*nCP)
-        CPloss = K.sum(CPchi2Terms,axis=1) #!!!!!!!!!!!this was changed !!!!
+        CPloss = K.sum(CPchi2Terms,axis=1)
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
         if forTraining == True:
@@ -792,7 +790,7 @@ returns:
 
 """
 def CrossEntropy(y_true,y_pred):
-    return K.binary_crossentropy(y_true, y_pred, from_logits=False) 
+    return K.binary_crossentropy(y_true, y_pred, from_logits=False)
 """
 createNetwork
 
@@ -831,7 +829,7 @@ returns:
 
 
 """
-def centerPhotocenter(image,imageSize):
+def centerPhotocenter(image,imageSize,useRoll,interp):
     image = (image +1)/2
     ii, jj = tf.meshgrid(tf.range(imageSize), tf.range(imageSize), indexing='ij')
     coords = tf.stack([tf.reshape(ii, (-1,)), tf.reshape(jj, (-1,))], axis=-1)
@@ -844,16 +842,14 @@ def centerPhotocenter(image,imageSize):
     centre_of_mass = tf.reduce_sum(volumes_flat * coords, axis=1) / total_mass
     centre_of_mass = -(centre_of_mass-((imageSize-1)/2))
 
-
-
-
-    intcentre_of_mass= tf.math.round(centre_of_mass)
-    image =tf.roll(image,shift=tf.cast(centre_of_mass[0,0],tf.int32), axis=1)
-    image =tf.roll(image,shift=tf.cast(centre_of_mass[0,1],tf.int32), axis=2)
-    centre_of_mass= centre_of_mass-intcentre_of_mass
-
-
-    image = tfa.image.translate(image,[[centre_of_mass[0,1],centre_of_mass[0,0]]],interpolation = 'BILINEAR')#,interpolation = 'NEAREST')#
+    fm='constant'
+    if useRoll == True:
+        fm = 'wrap'
+        #intcentre_of_mass= tf.math.round(centre_of_mass)
+        #image =tf.roll(image,shift=tf.cast(centre_of_mass[0,0],tf.int32), axis=1)
+        #image =tf.roll(image,shift=tf.cast(centre_of_mass[0,1],tf.int32), axis=2)
+        #centre_of_mass= centre_of_mass-intcentre_of_mass
+    image = tfa.image.translate(image,[[centre_of_mass[0,1],centre_of_mass[0,0]]],fillmode=fm,fill_value=-1,interpolation = interp)#,interpolation = 'NEAREST')#
     return (image-0.5)*2
 
 
@@ -1141,7 +1137,7 @@ def plotMeanAndSTD(mean,variance,image_Size,pixelSize,saveDir,plotVar = False):
 
 
 class framework:
-    def __init__(self, DataDir,filename,imageSize,pixelSize,generator,discriminator,opt,NoiseLength = 100,shiftPhotoCenter = True,resetOpt=True):
+    def __init__(self, DataDir,filename,imageSize,pixelSize,generator,discriminator,opt,NoiseLength = 100,shiftPhotoCenter = True,resetOpt=True,useRoll=True,interp='BILINEAR'):
         self.DataDir = DataDir
         self.filename= filename
         self.imageSize = imageSize
@@ -1156,8 +1152,9 @@ class framework:
         self.CPArtificial = None
         self.fullNet = None
         self.resetOpt = resetOpt
+        self.interp =interp
 
-    def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter,wavel0):
+    def setSparco(self,x,y,UDflux,PointFlux,denv,dsec,UDdiameter,wavel0,useLowCPapprox = False):
         self.x =x
         self.y =y
         self.UDflux = UDflux
@@ -1168,6 +1165,7 @@ class framework:
         self.useSparco = True
         self.shiftPhotoCenter = False
         self.wavel0 = wavel0
+        self.useLowCPapprox = useLowCPapprox
 
     def useArtificialDataNP(self,V2Artificial,CPArtificial):
         self.V2Artificial = V2Artificial
@@ -1323,7 +1321,6 @@ class framework:
         mean = np.zeros([image_Size,image_Size])
         variance = np.zeros([image_Size,image_Size])
         cubeA = np.array([None])
-        wavel0 = self.wavel0
         if self.useSparco == True:
             dataLikelihood = dataLikeloss_FixedSparco(self.DataDir,
                                             self.filename,
@@ -1340,7 +1337,8 @@ class framework:
                                             V2Artificial = self.V2Artificial,
                                             CPArtificial = self.CPArtificial,
                                             bootstrap = bootstrapping,
-                                            wavel0 = self.wavel0
+                                            wavel0 = self.wavel0,
+                                            useLowCPapprox = self.useLowCPapprox
                                             )
         else:
             dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
@@ -1349,7 +1347,7 @@ class framework:
         GeneratorCopy = tf.keras.models.clone_model(Generator)
         GeneratorCopy.set_weights(Generator.get_weights())
         if self.shiftPhotoCenter == True:
-            GeneratorCopy.add(Lambda(lambda x: centerPhotocenter(x,self.imageSize)))
+            GeneratorCopy.add(Lambda(lambda x: centerPhotocenter(x,self.imageSize,self.useRoll,self.interp)))
         for r in range(nrRestarts):
             #GeneratorCopy.set_weights(Generator.get_weights())
             if self.fullNet != None:
@@ -1596,7 +1594,8 @@ class framework:
                                         V2Artificial = self.V2Artificial,
                                         CPArtificial = self.CPArtificial,
                                         bootstrap = False,
-                                        bootstrapDir = bootstrapDir
+                                        bootstrapDir = bootstrapDir,
+                                        useLowCPapprox = self.useLowCPapprox
                                         )
         else:
             dataLikelihood= dataLikeloss_NoSparco(self.DataDir,self.filename,self.imageSize,self.pixelSize,
