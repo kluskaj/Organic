@@ -49,8 +49,8 @@ simV2 =np.load(dirV2)
 dirCP =os.path.expandvars('${VSC_DATA}/summerjobTests/ArtificialDataSets/CPModel_CLLac_clip_baselines.npy')
 simCP =np.load(dirCP)
 #directoryand name of the OIfits file in case of real data
-#DataDir = os.path.expandvars('${VSC_DATA}/CNN/OIfits/')
-DataDir = os.path.expandvars('${VSC_DATA}/summerjobTests/CLLac_data/')
+DataDir = os.path.expandvars('${VSC_DATA}/CNN/OIfits/')
+#DataDir = os.path.expandvars('${VSC_DATA}/summerjobTests/CLLac_data/')
 filename = 'HD45677all.fits'#'*.fits'#'HD45677all.fits'#'IRAS08544-4431_PIONIER_alloidata.fits'#
 
 
