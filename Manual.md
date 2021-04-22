@@ -77,6 +77,10 @@ The following sections are present in **ImageReconstruction.py**
   * **pixelSize** : Angular size of a pixel size in milli arc seconds (mas).
   * **optimizer** : The optimizer to be used for fine tuning the the generator. This optimizer is given as a dictionary and is reset for each reset of the generator training.
   * **resetOpt** : Boolean. If true the optimizer is reset when the generator is reset, if false the state is carried over.
+*
+  * **ShiftPhotoCenter** If true ORGANIC centers the photocenter of the images, this is also the default value, so it does not expresly need to be set. This option is automaticly set to false when using Fixed sparco parameters.
+  * UseRoll if True the integer photocenter offset is removed by "rolling" the image. If false this is not done and the pixels shifted into the image have value of 0 rel. flux
+  * Interp Defines the type of interpolation to be used for the photocenter centering. Options are: 'BILINEAR' and 'NEAREST'
 * Load the data used in the image reconstruction.
   * **dirV2** : Directory of a numpy array containing artificial squared visibility values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
   * **dirCP** : Directory of a numpy array containing artificial closure phase values, if one wishes to use these. The corresponding baselines and errorvalues are addopted from the used real dataset.
@@ -92,13 +96,14 @@ The following sections are present in **ImageReconstruction.py**
   * **denv** : the spectral index of the environment
   * **dsec** :  the spectral index of the point source (the uniform disk source has a default index of -4).
   * **UDdiameter** : The diameter of the resolved source in mas
+  * **wavel0** The reference wavelength for sparco, default is 1.65e-6 $\mu m$
   
 * run the image reconstrution
   * on line 78  a **framework** object is created using the parameters set using the previously set options.
   * on line 81 the SPARCO parameters of the reconstruction are set. If you do not wish to use SPARCO, do not run this line.
   * on line 84 the artificial squared visibility and closure phases are set. If you do not wish to use artificial data from numpy arrays, do not run this line.
   * The following three run options are present as an atribute of the framework object: 
-    * **ImageReconstruction** : runs a single image reconstruction for the chosen parameters
+    * **ImageReconstruction** : runs a single image reconstruction for the chosen parameters, by computing the average of a number of restarts
     * **bootstrappingReconstr** : Runs a boothstrapping of the image reconstruction. In this boothstrapping the closure phases and squared visibilities are treated independently.
     * For ease of use these first two run options can be uncommented, when this is done they use the parameters set in the 
     * **runGrid** : Runs ImageReconstruction for all combinations of the given parameters. The parameters are that can be set are:
@@ -107,7 +112,15 @@ The following sections are present in **ImageReconstruction.py**
         * mus: list with the values of hyperparameter for which to run the grid
         * kwargs: lists of other parameters to alter during the runs of the grid.
                   These can be the sparco parameters and pixelsize.
-    
+           
+* **tips for Using ORGANIC**
+  * When using fixed sparco parameters and PIONIER data for Circumstellar disks work best with the default parameters given in the ImageReconstruction.py.
+  * MATISSE data of IRAS08 gave bad results, alterations will likely need to be made to accomodate this data. Altough experimenting with the learning rate and number of epochs may also help.
+  * For reconstructions without SPARCO where the photocenter shift needs to be applied a lower learning rate, higher number of epochs and use of bilinear interpolation are beneficial. The use of bilinear interpolation greatly reduces the amount of checkerboard artifacts. 
+  * For stellar surfaces the GANs display a horizontal/vertical waffle-like pattern on the stellar surface. a better GAN likely needs to be trained, doing so may require a larger number of models, or a stronger discriminator. It is however also possible that the seen structure is a consequence of the convolutional architecture used. An alternative method may be found by fitting a variational autoencoder. 
+  * A lower value of **mu** does not nececerely provide a better fit to the data. A likely explanation for this is that the noise introduced by the dropout active in the discriminator helps with the optimizaton procedure. Adding droput layers to the generator (turned of during the GAN training and on during the image reconstruction) may be worth trying for future experiments.
+  * ORGANIC produces different results for different pre-trained GANs, parameters will likely need to be re-adjusted when using a different GAN
+  * ORGANIC lacks theoretical considerations, use at your own risk
   
 
 
