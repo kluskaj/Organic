@@ -1210,6 +1210,7 @@ class framework:
             opt = 'optimizers.'+self.opt['name']
             opt = eval(opt)
             opt = opt.from_config(self.opt)
+            #generator=generatorcopy without trained wheigths, self.generator = pretrain generator
             self.fullNet  = createNetwork(discriminator,Generator,dataLikelihood,hyperParam,NoiseLength,opt)
             self.fullNet.fit(noise, y_gen,epochs=1)
             self.fullNet.get_layer(index=1).set_weights(self.generator.get_weights())
