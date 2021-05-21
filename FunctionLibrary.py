@@ -804,6 +804,7 @@ returns:
 """
 
 def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength,opt):
+    discriminator.trainable = False
     noise_input = Input(shape = (NoiseLength,))
     x = generator(noise_input)
     gan_output= discriminator(x)
@@ -811,7 +812,6 @@ def createNetwork(discriminator, generator,dataLikelihood,hyperParam,NoiseLength
     #losses are reversed compared to paper!
     losses = [CrossEntropy ,dataLikelihood]
     gan.compile(loss=losses,optimizer= opt,loss_weights=[hyperParam,1])
-    discriminator.trainable = False
     return gan
 
 """
