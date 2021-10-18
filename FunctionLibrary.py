@@ -1207,9 +1207,9 @@ class framework:
         Generator.trainable = True
 
         if self.fullNet == None:
-            opt = 'optimizers.'+self.opt['name']
+            opt = 'optimizers.'+self.opt._name
             opt = eval(opt)
-            opt = opt.from_config(self.opt)
+            opt = opt.from_config(self.opt.get_config())
             #generator=generatorcopy without trained wheigths, self.generator = pretrain generator
             self.fullNet  = createNetwork(discriminator,Generator,dataLikelihood,hyperParam,NoiseLength,opt)
             self.fullNet.get_layer(index=1).set_weights(self.generator.get_weights())
@@ -1353,9 +1353,9 @@ class framework:
             if self.fullNet != None:
                 self.fullNet.get_layer(index=1).set_weights(self.generator.get_weights())
                 if self.resetOpt == True:
-                    opt = 'optimizers.'+self.opt['name']
+                    opt = 'optimizers.'+self.opt._name
                     opt = eval(opt)
-                    opt = opt.from_config(self.opt)
+                    opt = opt.from_config(self.opt.get_config())
                     self.fullNet.compile(loss=[CrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[hyperParam,1])
             Iter_dir = os.path.join(os.getcwd(), os.path.join(bootstrapDir,str(r)))
             if not os.path.isdir(Iter_dir) and loud ==True:
