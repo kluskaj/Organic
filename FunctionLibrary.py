@@ -562,6 +562,7 @@ useLowCPapprox = False
         ftSecondary = offcenterPointFT(x,y,ufunc,vfunc)
         # get the total visibility amplitudes
         VcomplDisk = bilinearInterp(ftImages,(vfunc/spacialFreqPerPixel)+int(ImageSize/2),(ufunc/spacialFreqPerPixel)+int(ImageSize/2))
+        print(wavel0)
         #equation 4 in sparco paper:
         VcomplTotal = UDflux * ftPrimary* K.pow(wavelfunc/wavel0,-4)
         VcomplTotal += PointFlux * ftSecondary* K.pow(wavelfunc/wavel0,dsec)
@@ -585,7 +586,7 @@ useLowCPapprox = False
         V2Chi2Terms = K.pow(V2observed - V2generated,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
         #V2Chi2Terms = V2Chi2Terms
         V2loss = K.sum(V2Chi2Terms,axis=1) #the squared visibility contribution to the loss
-
+        
         CPgenerated  = tf.math.angle(compTotalCompVis(ftImages,u1,v1,wavelCP))
         CPgenerated += tf.math.angle(compTotalCompVis(ftImages,u2,v2,wavelCP))
         CPgenerated -= tf.math.angle(compTotalCompVis(ftImages,u3,v3,wavelCP))
@@ -597,10 +598,13 @@ useLowCPapprox = False
 
         lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
         if forTraining == True:
+            print(V2loss,CPloss,lossValue)
             return  tf.cast(lossValue,tf.float32)
 
         else:
             plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr)
+            print('no training')
+            print(V2loss,CPloss,lossValue)
             return lossValue, V2loss , CPloss
 
     return internalloss
@@ -1595,6 +1599,7 @@ class framework:
                                         CPArtificial = self.CPArtificial,
                                         bootstrap = False,
                                         bootstrapDir = bootstrapDir,
+                                        wavel0 = self.wavel0,
                                         useLowCPapprox = self.useLowCPapprox
                                         )
         else:
