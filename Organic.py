@@ -3,10 +3,16 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import keras
 import tensorflow.keras.layers as layers
+from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.utils import plot_model
 import os
 from astropy.io import fits
 from PIL import Image
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+mpl.use('Agg')# %matplotlib inline
 
 
 class bcolors:
@@ -61,7 +67,11 @@ class GAN:
     The GAN is made from a generator and a discriminator
     """
 
-    def __init__(self, gen='', dis='', imagesize=128, noiselength=100, Adam_lr=0.0002, Adam_beta_1=0.5):
+    def __init__(self, gen='', dis='', imagesize=128, train_disc=False, noiselength=100, Adam_lr=0.0002, Adam_beta_1=0.5):
+        self.Adam_lr = Adam_lr
+        self.Adam_beta_1 = Adam_beta_1
+        self.opt = self.getOptimizer(self.Adam_lr, self.Adam_beta_1)
+        self.train_disc = train_disc
         if gen != '' and dis != '':
             self.dispath = dis
             self.genpath = gen
@@ -69,10 +79,11 @@ class GAN:
         else:
             self.npix = imagesize
             self.noiselength = noiselength
-            self.Adam_lr = Adam_lr
-            self.Adam_beta_1 = Adam_beta_1
-            self.generator = self.create_generator()
-            self.discriminator = self.create_discriminator()
+            self.gen = self.create_generator()
+            self.dis = self.create_discriminator()
+
+        self.gan = self.create_gan(train_disc = self.train_disc)
+
 
     @staticmethod
     def getOptimizer(lr, beta):
@@ -138,14 +149,34 @@ class GAN:
 
         return discriminator
 
-    def GANtraining(
+
+    def create_gan(self, train_disc = False):
+        """
+        create_gan
+
+        parameters:
+            discriminator: a keras sequential model (network) with outputsize = 1 and inputsize = imagesize*imagesize*1
+            generator: a keras sequential model (network) with outputsize = imagesize*imagesize*1 and inputsize = NoiseLength
+        returns:
+            gan: a compiled keras model where the generator is followed by the discriminator and the discriminator is not trainable
+
+        """
+        self.dis.trainable = train_disc
+        gan_input = layers.Input(shape = (self.noiselength,))
+        x = self.gen(gan_input)
+        gan_output= self.dis(x)
+        gan= Model(inputs=gan_input, outputs=gan_output)
+        gan.compile(loss='binary_crossentropy', optimizer = self.opt, metrics=["accuracy"])
+        return gan
+
+    def train(
         self,
         images,
-        saveDir='./saved_models/',
+        save_dir='./saved_models/',
         nepochs = 2000,
         nbatch = 50,
         OverTrainDiscr = 1,
-        PlotEpochs = 25,
+        plotEpochs = 25,
         Use1sidedLabelSmooth = False,
         saveEpochs = []
         ):
@@ -160,62 +191,48 @@ class GAN:
         Saves plots with examples of generated images and the loss evolution of the gans components
         Saves the trained netorks at the requested and final epochs of training
         '''
+        self.save_dir = save_dir
+
+        self.nbatch = nbatch
+        self.nepochs = nepochs
         # this is the GAN
         generator = self.gen
         discriminator = self.dis
+        gan = self.gan
         # these are the images
         X_train = images.images
+        datagen = images.dataGen
+        batch_count = int(np.ceil(X_train.shape[0] / nbatch)) # defining the batches
 
-        batch_count = int(np.ceil(X_train.shape[0] / batch_size))
-        # Creating GAN
-        gan = create_gan(discriminator, generator,NoiseLength,optim)
-        # arrays for plotting the loss evolution
-        epochArray = np.linspace(1,epochs,epochs,endpoint=True)
-        length = len(epochArray)
-        discrFakeLoss = np.zeros(length)
-        discrRealLoss = np.zeros(length)
-        discrFakeAccuracy = np.zeros(length)
-        discrRealAccuracy = np.zeros(length)
-        genLoss = np.zeros(length)
-        genAccuracy = np.zeros(length)
-        bepochArray = np.linspace(1,int(epochs*batch_count),int(epochs*batch_count),endpoint=True)
-        length = len(bepochArray)
-        bdiscrFakeLoss = np.zeros(length)
-        bdiscrRealLoss = np.zeros(length)
-        bdiscrFakeAccuracy = np.zeros(length)
-        bdiscrRealAccuracy = np.zeros(length)
-        bgenLoss = np.zeros(length)
-        bgenAccuracy = np.zeros(length)
+        # define the labels
         y_real = 1
-        batches = datagen.flow(X_train,y=None, batch_size = batch_size)
+        batches = datagen.flow(X_train,y=None, batch_size = nbatch)
         if Use1sidedLabelSmooth:
             y_real = 0.9
-        y_false= np.zeros(batch_size)
-        y_true = np.ones(batch_size)*y_real
-        b = 0
-        for e in range(1, epochs+1 ):
-            for _ in range(batch_count): #batch_size in version from jacques
+        y_false= np.zeros(nbatch)
+        y_true = np.ones(nbatch)*y_real
+
+        disFakeLoss, disRealLoss, disFakeAccuracy, genAccuracy, genLoss = [], [], [], [], []
+
+        inform('Starting GAN training')
+        for epoch in np.arange(nepochs):
+            inform2(f'Epoch {epoch+1} of {nepochs}')
+            disFakeLossEp, disRealLossEp, disFakeAccuracyEp = 0, 0 ,0
+            genLossEp, genAccuracyEp = 0, 0
+            for _ in range(nbatch): #batch_size in version from jacques
                 #generate  random noise as an input  to  initialize the  generator
-                noise= np.random.normal(0,1, [batch_size, NoiseLength])
-                # Generate fake MNIST images from noised input
+                noise = np.random.normal(0,1, [nbatch, self.noiselength])
+                # Generate ORGANIC images from noised input
                 generated_images = generator.predict(noise)
                 # train the discriminator more than the generator if requested
                 for i in range(OverTrainDiscr):
                     # Get a random set of  real images
                     image_batch = batches.next()
-                    #plt.figure()
-                    #img = centerPhotocenter(tf.expand_dims(image_batch[1], axis=0), 128)
-                    #mapable=plt.imshow((np.squeeze(img)+1)/2,interpolation=None,cmap='hot',vmin = 0,vmax = 1)
-                    #plt.colorbar(mapable)
-                    #plt.tight_layout()
-                    #plt.savefig('example loadedImage %d.png'%e)
-                    #plt.close()
-                    #quit()
                     # if the batch created by the generator is too small, resample
-                    if image_batch.shape[0] != batch_size:
-                        batches = datagen.flow(X_train,y=None, batch_size = batch_size)
+                    if image_batch.shape[0] != nbatch:
+                        batches = datagen.flow(X_train, y=None, batch_size = nbatch)
                         image_batch = batches.next()
-                    image_batch = image_batch.reshape(batch_size, image_size,image_size,1)
+                    image_batch = image_batch.reshape(nbatch, self.npix, self.npix, 1)
                     #Construct different batches of  real and fake data
                     X = np.concatenate([image_batch, generated_images])
                     # Labels for generated and real data
@@ -223,20 +240,16 @@ class GAN:
                     #Pre train discriminator on  fake and real data  before starting the gan.
                     discriminator.trainable=True
                     discriminator.train_on_batch(X, y_pred)
-                discrimRealEval = discriminator.evaluate(image_batch, y_pred[:batch_size],verbose=0)
-                discrimFakeEval = discriminator.evaluate(generated_images, y_pred[batch_size:],verbose=0)
+                disRealEval = discriminator.evaluate(image_batch, y_pred[:nbatch],verbose=0)
+                disFakeEval = discriminator.evaluate(generated_images, y_pred[nbatch:],verbose=0)
                 #evaluations for the cost evolution of the discriminator
-                discrFakeLoss[e-1] += discrimFakeEval[0]/batch_count
-                discrRealLoss[e-1] += discrimRealEval[0]/batch_count
-                discrFakeAccuracy[e-1] += discrimFakeEval[1]/batch_count
-
-                bdiscrFakeLoss[b] = discrimFakeEval[0]
-                bdiscrRealLoss[b] = discrimRealEval[0]
-                bdiscrFakeAccuracy[b] = discrimFakeEval[1]
+                disFakeLossEp += disFakeEval[0]/batch_count
+                disRealLossEp += disRealEval[0]/batch_count
+                disFakeAccuracyEp += disFakeEval[1]/batch_count
 
                 #Tricking the noised input of the Generator as real data
-                noise= np.random.normal(0,1, [batch_size, NoiseLength])
-                y_gen = np.ones(batch_size)
+                noise= np.random.normal(0,1, [nbatch, self.noiselength])
+                y_gen = np.ones(nbatch)
 
                 # During the training of gan,
                 # the weights of discriminator should be fixed.
@@ -246,23 +259,136 @@ class GAN:
                 # training  the GAN by alternating the training of the Discriminator
                 gan.train_on_batch(noise, y_gen)
                 #evaluation of generator
-                genEval = gan.evaluate(noise,y_gen,verbose =0)
-                genLoss[e-1] += genEval[0]/batch_count
-                genAccuracy[e-1] += genEval[1]/batch_count
-                bgenLoss[b] += genEval[0]
-                bgenAccuracy[b] += genEval[1]
-                b = b+1
+                genEval = gan.evaluate(noise, y_gen, verbose =0)
+                genLossEp += genEval[0]/batch_count
+                genAccuracyEp += genEval[1]/batch_count
+
+            # Saving all the metrics per epoch
+            genAccuracy.append(genAccuracyEp)
+            genLoss.append(genLossEp)
+            disFakeLoss.append(disFakeLossEp)
+            disRealLoss.append(disRealLossEp)
+            disFakeAccuracy.append(disFakeAccuracyEp)
+            #saveing current state of networks
+            self.gan = gan
+            self.dis = discriminator
+            self.gen = generator
+
             # plot examples of generated images
-            if e == 1 or e % PlotEpochs == 0:
-                plot_generated_images(e, generator,NoiseLength,image_size)
-            if e in saveEpochs:
-                saveModel(saveDir,str(e)+'thEpoch.h5',gan,generator,discriminator)
-                plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,genAccuracy)
-        saveModel(saveDir,'finalModel.h5',gan,generator,discriminator)
-        plotGanEvolution(epochArray,discrFakeLoss,discrRealLoss,genLoss,discrFakeAccuracy,genAccuracy)
-        plotGanEvolution(bepochArray,bdiscrFakeLoss,bdiscrRealLoss,bgenLoss,bdiscrFakeAccuracy,bgenAccuracy,plus = 'NonAveraged')
+            if epoch == 1 or epoch % plotEpochs == 0:
+                self.plot_generated_images(epoch)
+            if epoch in saveEpochs:
+                self.saveModel(str(e)+'thEpoch.h5')
+
+        self.saveModel('finalModel.h5')
+        self.plotGanEvolution(disFakeLoss,disRealLoss,genLoss,disFakeAccuracy,genAccuracy)
+
+        inform(f'Training succesfully finished.\nResults saved at {self.save_dir}')
 
 
+    def plotGanEvolution(self, disFakeLoss, disRealLoss,
+    genLoss, disFakeAccuracy, genAccuracy):
+        """
+        plotGanEvolution
+
+
+        parameters:
+            epoch: array containing the epochs to be plotted on the x-newaxis
+            discrFakeLoss: cost values for the discriminators response to fake(generated) image data
+            discrRealLoss: cost values for the discriminators response to real(model) image data
+            genLoss: cost values for the generator
+            discrFakeAccuracy: accuracy values for the discriminators response to fake(generated) image data
+            discrRealAccuracy: accuracy values for the discriminators response to real(model) image data
+            genAccuracy: accuracy values for the generator
+
+        effect:
+            Plots the cost and accuracy terms as a function of epoch and stores the resulting plots
+
+        """
+        dir = self.save_dir
+
+        fig, ax = plt.subplots()
+
+        color = iter(plt.cm.rainbow(np.linspace(0,1,5)))
+
+        c = next(color)
+        plt.plot(disFakeLoss,label = 'discriminator fake data loss', c = c)
+        c=next(color)
+        plt.plot(disRealLoss,label = 'discriminator real data loss', c = c)
+        c=next(color)
+        plt.plot(genLoss, label = 'generator loss', c = c)
+        plt.legend()
+        plt.ylabel('Loss')
+        plt.xlabel('Epoch')
+        plt.savefig(dir+'LossEvolution.pdf')
+        plt.close()
+
+        fig, ax = plt.subplots()
+        plt.plot(disFakeAccuracy,label = 'discriminator data accuracy',c = c)
+        c=next(color)
+        plt.plot(genAccuracy,label = 'generator data accuracy',  c = c)
+        plt.legend()
+        plt.ylabel('Accuracy')
+        plt.xlabel('Epoch')
+        plt.savefig(dir+'AccuracyEvolution.pdf')
+        plt.close()
+
+
+    def saveModel(self, model_name):
+        """
+        saveModel
+
+        parameters:
+            Modelname: name to be used for storing the networks of this run
+        effect:
+            saves the keras models (neural networks) in their curren state
+
+        """
+        #test if the path exists, if not, creates it
+        if not os.path.isdir(self.save_dir):
+            os.makedirs(self.save_dir)
+
+        model_path_GAN = os.path.join(self.save_dir, 'GANfull'+ model_name)
+        self.gan.save(model_path_GAN)
+        plot_model(self.gan, to_file = 'full.png', show_shapes=True)
+
+        model_path_generator = os.path.join(self.save_dir, 'generator' + model_name)
+        self.gen.save(model_path_generator)
+        plot_model(self.gen, to_file='generator.png',show_shapes=True)
+
+        model_path_discriminator = os.path.join(self.save_dir, 'discriminator' + model_name)
+        self.dis.save(model_path_discriminator)
+        plot_model(self.dis, to_file='discriminator.png',show_shapes=True)
+        print(f'Saved trained model at {model_path_GAN}')
+
+
+    def plot_generated_images(self, epoch, examples=36, dim=(6, 6), figsize=(15, 9)):
+        """
+        plot_generated_images
+
+        parameters:
+            epoch: the epoch at which th plots are made, used for naming the image
+            generator: the generator neural network during the given epochs
+            examples: the number of examples to be displayed in the plot
+        effect:
+            saves images contain a number of random example images created by the generator
+
+        """
+        generator = self.gen
+        noise = np.random.normal(loc=0, scale=1, size=[examples,self.noiselength])
+        generated_images = generator.predict(noise)
+        generated_images = generated_images.reshape(examples, self.npix, self.npix)
+        fig, axs = plt.subplots(dim[0], dim[1], figsize=figsize, sharex=True, sharey=True)
+        i = -1
+        for axv in axs:
+            for ax in axv:
+                i += 1
+                ax.imshow(generated_images[i], origin = 'lower', interpolation=None, cmap='hot', vmin=-1, vmax=1)
+                #ax.invert_xaxis()
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(f'cgan_generated_image_ep{epoch}.png')
+        plt.close()
 
 
 
@@ -351,13 +477,13 @@ class inputImages:
             data_format = self.data_format,
             validation_split = self.validation_split,
             )
-        if self.loadFromCube == True:
-            X_train = self.load_data_fromCube()
+        if self.loadfromCube == True:
+            self.images = self.load_data_fromCube()
         else:
-            X_train = self.load_data()
-        inform('Input image class initialised')
+            self.images = self.load_data()
+        inform(f'Input images loaded successfully with shape {self.images.shape}')
 
-    def load_data_fromCube():
+    def load_data_fromCube(self):
         """
         load_data_fromCube
 
@@ -366,28 +492,37 @@ class inputImages:
             imagesize: the size to which the obtained images will be rescaled (imagesize*imagesize pixels)
         returns:
             images: a numpy array containing the image information and dimensions (number of images *imagesize*imagesize*1 )
-            TO TEST DOING THINGS TWICE????
         """
         cube = fits.getdata(self.dir, ext=0)
-        img = Image.fromarray(cube[0])
-        img = img.resize((self.npix,self.npix),Image.BILINEAR )
-        #img=img.transpose(Image.FLIP_LEFT_RIGHT)
-        images= np.array([np.array(img)[:, :, np.newaxis]])
-        images = images/np.max(images)
-        #images=(images-np.min(images))/(np.max(images)-np.min(images))
-        for i in range(1,len(cube)):
-            image = cube[i]
+
+        images = []
+        for i in np.arange(len(cube)):
+
+            img0 = Image.fromarray(cube[i])
+            img = img0.resize((self.npix,self.npix),Image.BILINEAR )
+            img /= np.max(img)
+            #img = img[:,:,np.newaxis]
+            images.append(img)
+
+        newcube = np.array(images)
+        newcube = (newcube[:,:,:,np.newaxis]-0.5)*2
+
+        return newcube
+
+    def load_data(self):
+        dirs = glob.glob(self.dir)
+        images = []
+        for i in np.arange(len(dirs)):
+            image = fits.getdata(dirs[i], ext=0)
             img = Image.fromarray(image)
             img = img.resize((self.npix,self.npix),Image.BILINEAR )
-            #img=img.transpose(Image.FLIP_LEFT_RIGHT)
-            image=np.array([np.array(img)[:, :, np.newaxis]])
-            #image=(image-np.min(image))/(np.max(image)-np.min(image))
-            image = image/np.max(image)
-            images = np.concatenate([images, image]) #add the rescaled image to the array
-        # normalize to [-1,+1]
-        images = (images-0.5)*2
-        return images
+            img /= np.max(img)
+            # img = img[:,:,np.newaxis]
+            images.append(img)
+        newcube = np.array(images)
+        newcube = (newcube[:,:,:,np.newaxis]-0.5)*2
 
+        return newcube
 
 
 
