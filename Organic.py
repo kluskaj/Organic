@@ -72,13 +72,13 @@ class GAN:
         self.Adam_beta_1 = Adam_beta_1
         self.opt = self.getOptimizer(self.Adam_lr, self.Adam_beta_1)
         self.train_disc = train_disc
+        self.noiselength = noiselength
         if gen != '' and dis != '':
             self.dispath = dis
             self.genpath = gen
             self.read()
         else:
             self.npix = imagesize
-            self.noiselength = noiselength
             self.gen = self.create_generator()
             self.dis = self.create_discriminator()
 
@@ -86,8 +86,8 @@ class GAN:
 
 
     @staticmethod
-    def getOptimizer(lr, beta):
-        return Adam(learning_rate = lr, beta_1 = beta)
+    def getOptimizer(lr, beta1, beta2=0.999, epsilon = 1e-7):
+        return Adam(learning_rate = lr, beta_1 = beta1, beta_2 = beta2, epsilon = epsilon)
 
     def read(self):
         inform(f'Loading the generator from {self.genpath}')
@@ -391,6 +391,45 @@ class GAN:
         plt.close()
 
 
+    def ImageReconstruction(self, datafiles, sparco, dataDir='./', mu=1, epochs=200, nrestart=200, boot=100,
+                            ps=0.6, shiftPhotoCenter = True, UseRoll=True,
+                            interp = 'BILINEAR', useLowCPapprox = False, grid = False
+                            ):
+        self.mu = mu
+        self.epochs = epochs
+        self.ps = ps
+        self.boot = boot
+        self.nrestart = nrestart
+        self.useLowCPapprox = useLowCPapprox
+        self.datafiles = datafiles
+        self.sparco = sparco
+        self.data_dir = dataDir
+        self.shiftPhotoCenter = shiftPhotoCenter
+        self.use_roll = UseRoll
+        self.interp = interp
+
+        if grid:
+            self.runGrid()
+        else:
+            self.ImgRec()
+
+        # set new optimizer
+
+
+        # Loading data
+
+class SPARCO:
+    def __init__(self, wavel0=1.65e-6, fstar=0.0, dstar=-4.0, denv=0.0, UDstar=0.01, fsec=0.0,
+                        dsec=-4, xsec = 0.0, ysec = 0.0):
+        self.wavel0 = wavel0
+        self.fstar = fstar
+        self.dstar = dstar
+        self.denv = denv
+        self.UDstar = UDstar
+        self.fsec = fsec
+        self.dsec = dsec
+        self.xsec = xsec
+        self.ysec = ysec
 
 
 class inputImages:
