@@ -2,6 +2,7 @@
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import keras
+import tensorflow as tf
 import tensorflow.keras.layers as layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -12,6 +13,8 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import itertools
+import ReadOIFITS as oi
 mpl.use('Agg')# %matplotlib inline
 
 
@@ -67,7 +70,7 @@ class GAN:
     The GAN is made from a generator and a discriminator
     """
 
-    def __init__(self, gen='', dis='', imagesize=128, train_disc=False, noiselength=100, Adam_lr=0.0002, Adam_beta_1=0.5):
+    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0002, Adam_beta_1=0.5):
         self.Adam_lr = Adam_lr
         self.Adam_beta_1 = Adam_beta_1
         self.opt = self.getOptimizer(self.Adam_lr, self.Adam_beta_1)
@@ -78,7 +81,7 @@ class GAN:
             self.genpath = gen
             self.read()
         else:
-            self.npix = imagesize
+            self.npix = npix
             self.gen = self.create_generator()
             self.dis = self.create_discriminator()
 
@@ -92,10 +95,13 @@ class GAN:
     def read(self):
         inform(f'Loading the generator from {self.genpath}')
         gen = load_model(self.genpath)
+        gen.summary()
         inform(f'Loading the discriminator from {self.dispath}')
         dis = load_model(self.dispath)
+        dis.summary()
         self.gen = gen
         self.dis = dis
+        self.npix = gen.output.shape[1]
 
 
     def create_generator(self, ReLU=0.25):
@@ -391,10 +397,70 @@ class GAN:
         plt.close()
 
 
-    def ImageReconstruction(self, datafiles, sparco, dataDir='./', mu=1, epochs=200, nrestart=200, boot=100,
+    def ImageReconstruction(self, data_files, sparco, data_dir='./', mu=1, epochs=200, nrestart=200, boot=100,
                             ps=0.6, shiftPhotoCenter = True, UseRoll=True,
                             interp = 'BILINEAR', useLowCPapprox = False, grid = False
                             ):
+        self.mu = mu
+        self.epochs = epochs
+        self.ps = ps
+        self.boot = boot
+        self.nrestart = nrestart
+        self.useLowCPapprox = useLowCPapprox
+        self.sparco = sparco
+        self.shiftPhotoCenter = shiftPhotoCenter
+        self.use_roll = UseRoll
+        self.interp = interp
+        self.grid = grid
+        self.data = Data(data_dir, data_files)
+
+
+        # checking if grid of reconstructions needed
+        ngrid, niters = 0, 1
+        gridpars, gridvals = [], []
+        for x, v in self.__dict__.items():
+            if isinstance(v, list):
+                self.grid = True
+                ngrid += 1
+                gridpars.append(x)
+                gridvals.append(v)
+                niters *= len(v)
+
+#        print(self.__dict__[gridpars[0]])
+        # Run a single image recosntruction or a grid
+        if self.grid:
+            self.niters = niters
+            self.ngrid = ngrid
+            self.gridpars = gridpars
+            self.gridvals = gridvals
+            print(gridvals)
+            self.iterable = itertools.product(*self.gridvals)
+            inform(f'Making an image reconstruction grid ({niters} reconstructions) on {ngrid} parameter(s): {gridpars}')
+            self.runGrid()
+        else:
+            inform('Running a single image reconstruction')
+            self.SingleImgRec()
+
+    def runGrid(self):
+        for i, k in zip(self.iterable, np.arange(self.niters)):
+            state = ''
+            for pars, p in zip(self.gridpars, np.arange(self.ngrid)):
+                state += f' {pars}={i[p]}'
+            inform2(f'Image reconstruction with{state}')
+            self.ImgRec()
+
+    def SingleImgRec(self):
+        print('prout')
+
+    def ImgRec(self ):
+        print('prout')
+
+
+class ImgRec:
+    def __init__(self, data, gen, dis, sparco, mu=1, epochs=100, ps=0.5,
+                            boot=0, nrestart = 200,
+                            shiftPhotoCenter = True, UseRoll=True,
+                            interp = 'BILINEAR', useLowCPapprox = False):
         self.mu = mu
         self.epochs = epochs
         self.ps = ps
@@ -407,16 +473,159 @@ class GAN:
         self.shiftPhotoCenter = shiftPhotoCenter
         self.use_roll = UseRoll
         self.interp = interp
+        self.gen = gen
+        self.dis = dis
+        self.sparco = sparco
+        self.dataset = data
+        self.imgrec()
 
-        if grid:
-            self.runGrid()
+    def imgrec(self):
+
+        # First data loading and selection
+        data = self.dataset
+        if self.boot >= 1:
+            V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_bootstrap()
         else:
-            self.ImgRec()
-
-        # set new optimizer
+            V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_data()
 
 
-        # Loading data
+        a = self.data_loss(  u, u1, u2, u3, v, v1, v2, v3)
+
+
+    def data_loss(self, y_true, y_pred, u, u1, u2, u3, v, v1, v2, v3):
+        #compute the fourier transform of the images
+        y_pred = tf.squeeze(y_pred, axis = 3)
+        y_pred = (y_pred+1)/2
+        y_pred = tf.cast( (y_pred), tf.complex128)
+        y_pred = tf.signal.ifftshift(y_pred, axes = (1,2))
+        ftImages = tf.signal.fft2d(y_pred)#is complex!!
+        ftImages = tf.signal.fftshift(ftImages, axes=(1,2))
+        coordsMax = [[[[0,int(self.npix/2),int(self.npix/2)]]]]
+        ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
+        VcomplForV2 = compTotalCompVis(ftImages,u,v,wavelV2)
+        V2generated = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images
+
+        V2Chi2Terms = K.pow(V2observed - V2generated,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
+        #V2Chi2Terms = V2Chi2Terms
+        V2loss = K.sum(V2Chi2Terms,axis=1) #the squared visibility contribution to the loss
+
+        CPgenerated  = tf.math.angle(compTotalCompVis(ftImages,u1,v1,wavelCP))
+        CPgenerated += tf.math.angle(compTotalCompVis(ftImages,u2,v2,wavelCP))
+        CPgenerated -= tf.math.angle(compTotalCompVis(ftImages,u3,v3,wavelCP))
+        CPchi2Terms = 2*(1-tf.math.cos(CPobserved-CPgenerated))/(K.pow(CPerr,2)*nCP)
+        if useLowCPapprox == True:
+            CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
+
+        CPloss = K.sum(CPchi2Terms,axis=1)
+
+        lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
+        if forTraining == True:
+            print(V2loss,CPloss,lossValue)
+            return  tf.cast(lossValue,tf.float32)
+
+        else:
+            plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr)
+            print('no training')
+            print(V2loss,CPloss,lossValue)
+            return lossValue, V2loss , CPloss
+
+
+    @staticmethod
+    def offcenterPointFT(x,y,u,v):
+        u = tf.constant(u,dtype = tf.complex128)
+        v = tf.constant(v,dtype = tf.complex128)
+        return tf.math.exp(-2*np.pi*1j*(x*u+y*v))
+
+
+    @staticmethod
+    def bilinearInterp(grid,ufunc,vfunc):
+    #preforms a binlinear interpolation on grid at continious pixel coordinates ufunc,vfunc
+        ubelow = np.floor(ufunc).astype(int)
+        vbelow = np.floor(vfunc).astype(int)
+        uabove = ubelow +1
+        vabove = vbelow +1
+        coords = tf.constant([[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]])
+        interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
+        coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
+        interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
+        coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
+        interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
+        coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
+        interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
+        return interpValues
+
+    def dataloss(self):
+        data = oi.read()
+        # SPARCO HERE!!!!
+        x = sparco.xsec *np.pi*0.001/(3600*180)
+        y = sparco.ysec *np.pi*0.001/(3600*180)
+        fstar = sparco.fstar # UDflux
+        fsec = sparco.fsec # Pointflux
+        UDstar = sparco.UDstar # UDdiameter
+
+
+class Data:
+    def __init__(self, dir, file):
+        self.dir = dir
+        self.file = file
+        self.read_data()
+
+    def read_data(self):
+        data = oi.read(self.dir, self.file)
+        dataObj = data.givedataJK()
+
+        V2observed, V2err = dataObj['v2']
+        nV2 = len(V2err)
+
+        CPobserved, CPerr = dataObj['cp']
+        nCP = len(CPerr)
+
+        u, u1, u2, u3 = dataObj['u']
+        v, v1, v2, v3 = dataObj['v']
+
+        waveV2 = dataObj['wave'][0]
+        waveCP = dataObj['wave'][1]
+
+        V2 = tf.constant(V2observed)#conversion to tensor
+        V2err = tf.constant(V2err)#conversion to tensor
+        CP = tf.constant(CPobserved)*np.pi/180 #conversion to radian & cast to tensor
+        CPerr = tf.constant(CPerr)*np.pi/180 #conversion to radian & cast to tensor
+        waveV2 = tf.constant(waveV2,dtype = tf.complex128) #conversion to tensor
+        waveCP = tf.constant(waveCP,dtype = tf.complex128) #conversion to tensor
+
+        self.nV2 = nV2
+        self.nCP = nCP
+        self.V2 = V2
+        self.V2err = V2err
+        self.CP = CP
+        self.CPerr = CPerr
+        self.waveV2 = waveV2
+        self.waveCP = waveCP
+        self.u = u
+        self.u1 = u1
+        self.u2 = u2
+        self.u3 = u3
+        self.v = v
+        self.v1 = v1
+        self.v2 = v2
+        self.v3 = v3
+
+
+    def get_data(self):
+        return self.V2, self.V2err, self.CP, self.CPerr, self.waveV2, self.waveCP,self.u, self.u1, self.u2, self.u3, self.v, self.v1, self.v2, self.v3
+
+
+    def get_bootstrap(self):
+        V2selection = np.random.randint(0,self.nV2,self.nV2)
+        newV2, newV2err = self.V2[V2selection], self.V2err[V2selection]
+        CPselection = np.random.randint(0,self.nCP,self.nCP)
+        newCP, newCPerr = self.CP[CPselection], self.CPerr[CPselection]
+        newu, newu1, newu2, newu3 = self.u[V2selection], self.u1[CPselection], self.u2[CPselection], self.u3[CPselection]
+        newv, newv1, newv2, newv3 = self.v[V2selection], self.v1[CPselection], self.v2[CPselection], self.v3[CPselection]
+        newwavelV2 = self.waveV2[V2selection]
+        newwavelCP = self.waveCP[CPselection]
+        return newV2, newV2err, newCP, newCPerr, newwaveV2, newwaveCP, newu, newu1, newu2, newu3, newv, newv1, newv2, newv3
+
 
 class SPARCO:
     def __init__(self, wavel0=1.65e-6, fstar=0.0, dstar=-4.0, denv=0.0, UDstar=0.01, fsec=0.0,
