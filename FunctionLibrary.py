@@ -586,7 +586,7 @@ useLowCPapprox = False
         V2Chi2Terms = K.pow(V2observed - V2generated,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
         #V2Chi2Terms = V2Chi2Terms
         V2loss = K.sum(V2Chi2Terms,axis=1) #the squared visibility contribution to the loss
-        
+
         CPgenerated  = tf.math.angle(compTotalCompVis(ftImages,u1,v1,wavelCP))
         CPgenerated += tf.math.angle(compTotalCompVis(ftImages,u2,v2,wavelCP))
         CPgenerated -= tf.math.angle(compTotalCompVis(ftImages,u3,v3,wavelCP))

@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import itertools
 import ReadOIFITS as oi
+import tensorflow.keras.backend as K
 mpl.use('Agg')# %matplotlib inline
 
 
@@ -29,6 +30,7 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 
+# Some fancy message writing...
 def header(msg):
     print(bcolors.HEADER + msg + bcolors.ENDC)
 
@@ -62,7 +64,8 @@ def log(msg, dir):
     f.write(msg+"\n")
     f.close()
 
-
+def CrossEntropy(y_true,y_pred):
+    return K.binary_crossentropy(y_true, y_pred, from_logits=False)
 
 class GAN:
     """
@@ -70,7 +73,8 @@ class GAN:
     The GAN is made from a generator and a discriminator
     """
 
-    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0002, Adam_beta_1=0.5):
+    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0002, Adam_beta_1=0.5, resetOpt=False):
+        self.resetOpt = resetOpt
         self.Adam_lr = Adam_lr
         self.Adam_beta_1 = Adam_beta_1
         self.opt = self.getOptimizer(self.Adam_lr, self.Adam_beta_1)
@@ -93,6 +97,9 @@ class GAN:
         return Adam(learning_rate = lr, beta_1 = beta1, beta_2 = beta2, epsilon = epsilon)
 
     def read(self):
+        '''
+        Loading the dictionnary from the generator and discriminator pathes
+        '''
         inform(f'Loading the generator from {self.genpath}')
         gen = load_model(self.genpath)
         gen.summary()
@@ -397,13 +404,14 @@ class GAN:
         plt.close()
 
 
-    def ImageReconstruction(self, data_files, sparco, data_dir='./', mu=1, epochs=200, nrestart=200, boot=100,
+    def ImageReconstruction(self, data_files, sparco, data_dir='./', mu=1, epochs=200, nrestart=200, boot=False, nboot=100,
                             ps=0.6, shiftPhotoCenter = True, UseRoll=True,
                             interp = 'BILINEAR', useLowCPapprox = False, grid = False
                             ):
         self.mu = mu
         self.epochs = epochs
         self.ps = ps
+        self.nboot = nboot
         self.boot = boot
         self.nrestart = nrestart
         self.useLowCPapprox = useLowCPapprox
@@ -414,6 +422,22 @@ class GAN:
         self.grid = grid
         self.data = Data(data_dir, data_files)
 
+        # Creating dictionary with image recsontruction parameters
+        self.params = {
+            'mu' : self.mu,
+            'ps' : self.ps,
+            'epochs' : self.epochs,
+            'nrestart' : self.nrestart,
+            'useLowCPapprox' : self.useLowCPapprox,
+            'fstar' : sparco.fstar,
+            'dstar' : sparco.dstar,
+            'denv' : sparco.denv,
+            'UDstar' : sparco.UDstar,
+            'fsec' : sparco.fsec,
+            'dsec' : sparco.dsec,
+            'xsec' : sparco.xsec,
+            'ysec' : sparco.ysec,
+        }
 
         # checking if grid of reconstructions needed
         ngrid, niters = 0, 1
@@ -425,8 +449,17 @@ class GAN:
                 gridpars.append(x)
                 gridvals.append(v)
                 niters *= len(v)
+        # same for SPARCO
+        for x, v in sparco.__dict__.items():
+            if isinstance(v, list):
+                self.grid = True
+                ngrid += 1
+                gridpars.append(x)
+                gridvals.append(v)
+                niters *= len(v)
 
-#        print(self.__dict__[gridpars[0]])
+
+                #        print(self.__dict__[gridpars[0]])
         # Run a single image recosntruction or a grid
         if self.grid:
             self.niters = niters
@@ -439,21 +472,242 @@ class GAN:
             self.runGrid()
         else:
             inform('Running a single image reconstruction')
+            self.dir = 'ImageRec'
             self.SingleImgRec()
 
     def runGrid(self):
         for i, k in zip(self.iterable, np.arange(self.niters)):
             state = ''
+            dir = 'ImageRec'
             for pars, p in zip(self.gridpars, np.arange(self.ngrid)):
+                self.params[f'{pars}'] = i[p]
                 state += f' {pars}={i[p]}'
+                dir += f'_{pars}={i[p]}'
             inform2(f'Image reconstruction with{state}')
+            self.dir = dir
             self.ImgRec()
 
     def SingleImgRec(self):
         print('prout')
 
     def ImgRec(self ):
-        print('prout')
+        params = self.params
+        #Create data loss
+        self.data_loss = self.dataloss
+        # Create the GAN
+        # GAN = self.createGAN() NO NEED
+
+        # Update GAN
+        GeneratorCopy = tf.keras.models.clone_model(self.gen)
+        GeneratorCopy.set_weights(self.gen.get_weights())
+        outdir = os.path.join(os.getcwd(),self.dir)
+        for r in range(params['nrestart']):
+            #GeneratorCopy.set_weights(Generator.get_weights())
+            if self.gan != None:
+                self.gan.get_layer(index=1).set_weights(self.gen.get_weights())
+                if self.resetOpt == True:
+                    opt = 'optimizers.'+self.opt._name
+                    opt = eval(opt)
+                    opt = opt.from_config(self.opt.get_config())
+                    self.gan.compile(loss=[CrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[params['mu'],1])
+
+            # generating the noise vector for this restart
+            noisevector = np.array([np.random.normal(0, 1, 100)])
+            y_gen = [np.ones(1),np.ones(1)]
+
+            # the loop on epochs with one noise vector
+            discloss = []
+            chi2 = []
+            for e in range(1, params['epochs']+1 ):
+                print(e)
+                #generate  random noise as an input  to  initialize the  generator
+                hist= self.gan.train_on_batch(noisevector, y_gen)
+                discloss.append( hyperParam*hist[1] )
+                chi2.append( hist[2] )
+                #plot the image at the specified epochs
+                if e in plotAtEpoch:
+                    plot_generated_images2(e, self.fullNet.get_layer(index=1), noisevector, image_Size, pixelSize, saveDir)
+                    plt.close()
+
+    def createGAN(self):
+        # Loading networks
+        dis = self.dis
+        gen = self.gen
+        dis.trainable = False
+        noise_input = layers.Input(shape = (100,))
+        x = gen(noise_input)
+        gan_output= dis(x)
+        gan = Model(inputs=noise_input, outputs=[gan_output,x])
+        losses = [CrossEntropy , self.data_loss]
+        mu = self.params['mu']
+        gan.compile(loss=losses, optimizer= opt, loss_weights=[mu,1])
+
+
+    def dataloss(self):
+        data = self.data
+        if self.boot:
+            V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_bootstrap()
+        else:
+            V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_data()
+
+        params = self.params
+        fstar = params['fstar']
+        fsec = params['fsec']
+        UD = params['UDstar']
+        denv = params['denv']
+        dsec = params['dsec']
+        xsec = params['xsec']
+        ysec = params['ysec']
+        ps = params['ps']
+        wave0 = params['wave0']
+        useLowCPapprox = params['useLowCPapprox']
+        nV2 = len(V2)
+        nCP = len(CP)
+        npix = 128 ## to CHANGE TO GRAB FROM THE GAN
+        spacialFreqPerPixel = (3600/(0.001*npix*ps))*(180/np.pi)
+
+        def offcenterPointFT(x, y, u, v):
+            u = tf.constant(u,dtype = tf.complex128)
+            v = tf.constant(v,dtype = tf.complex128)
+            return tf.math.exp(-2*np.pi*1j*(x*u+y*v))
+
+        #preforms a binlinear interpolation on grid at continious pixel coordinates ufunc,vfunc
+        def bilinearInterp(grid, ufunc, vfunc):
+            ubelow = np.floor(ufunc).astype(int)
+            vbelow = np.floor(vfunc).astype(int)
+            uabove = ubelow +1
+            vabove = vbelow +1
+            coords = tf.constant([[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]])
+            interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
+            coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
+            interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
+            coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
+            interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
+            coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
+            interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
+            return interpValues
+
+        #plots a comperison between observations and observables of the reconstruction,aswell as the uv coverage
+        def plotObservablesComparison(V2generated, V2observed, V2err, CPgenerated, CPobserved, CPerr):
+
+            #v2 with residual comparison, no colors indicating wavelength
+            plt.figure(figsize=(3.5, 6))
+            gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+            ax1=plt.subplot(gs[0]) # sharex=True)
+            absB = (np.sqrt(u**2+v**2)/(10**6))
+            plt.scatter(absB, V2generated[0].numpy(), marker='.',s=40, label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
+            plt.scatter(absB,V2observed,marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
+            plt.errorbar(absB,V2observed,V2err,elinewidth=0.2,ls='none',c ='r')
+            plt.ylim(0,1)
+            plt.ylabel(r'$V^2$')
+            plt.legend()
+
+            plt.setp(ax1.get_xticklabels(), visible=False)
+            plt.subplot(gs[1], sharex=ax1)
+            plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',alpha=0.6,edgecolors ='k',linewidth=0.1)
+            plt.ylabel(r'residuals',fontsize =12)
+            plt.xlabel(r'$\mid B\mid (M\lambda)$')
+            plt.tight_layout()
+            if bootstrapDir == None:
+                plt.savefig(os.path.join(os.getcwd(),'V2comparisonNoColor.png'))
+            else:
+                plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparisonNoColor.png'))
+
+            #plots the uv coverage
+            plt.figure()
+            plt.scatter(u/(10**6),v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+            plt.scatter(-u/(10**6),-v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+            plt.xlabel(r'$ u (M\lambda)$')
+            plt.ylabel(r'$ v (M\lambda)$')
+            plt.gca().set_aspect('equal', adjustable='box')
+            if bootstrapDir == None:
+                plt.savefig(os.path.join(os.getcwd(), 'uvCoverage.png'))
+            else:
+                plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/uvCoverage.png'))
+
+
+            #cp with residual comparison without color indicating wavelength
+            plt.figure(figsize=(3.5, 6))
+            gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+            ax1=plt.subplot(gs[0]) # sharex=True)
+            maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))
+            plt.scatter(maxB,CPgenerated[0].numpy(),s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+            plt.scatter(maxB,CPobserved,s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+            plt.errorbar(maxB,CPobserved,CPerr,ls='none',elinewidth=0.2,c ='r')
+            plt.legend()
+            plt.ylabel(r'closure phase(radian)',fontsize =12)
+
+            plt.setp(ax1.get_xticklabels(), visible=False)
+            plt.subplot(gs[1], sharex=ax1)
+            plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr)),s=30,marker='.',c = 'b',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+            #color = colors.to_rgba(np.real(wavelCP.numpy())[], alpha=None) #color = clb.to_rgba(waveV2[])
+            #c[0].set_color(color)
+
+            plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
+            plt.ylabel(r'residuals',fontsize =12)
+            plt.tight_layout()
+            if bootstrapDir == None:
+                plt.savefig(os.path.join(os.getcwd(),'cpComparisonNoColor.png'))
+            else:
+                plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparisonNoColor.png'))
+            plt.close()
+
+
+
+        def compTotalCompVis(ftImages, ufunc, vfunc, wavelfunc):
+            #to compute the radial coordinate in the uv plane so compute the ft of the primary, which is a uniform disk, so the ft is....
+            radii = np.pi*UD*np.sqrt(ufunc**2 + vfunc**2)
+            ftPrimary = tf.constant(2*sp.jv(1,radii)/(radii),dtype = tf.complex128)
+            #see extra function
+            ftSecondary = offcenterPointFT( xsec, ysec, ufunc, vfunc)
+            # get the total visibility amplitudes
+            VcomplDisk = bilinearInterp(ftImages,(vfunc/spacialFreqPerPixel)+int(ImageSize/2),(ufunc/spacialFreqPerPixel)+int(ImageSize/2))
+            #equation 4 in sparco paper:
+            VcomplTotal = fstar * ftPrimary* K.pow(wavelfunc/wave0, dstar)
+            VcomplTotal += fsec * ftSecondary* K.pow(wavelfunc/wave0, dsec)
+            VcomplTotal += (1-fstar-fsec) *VcomplDisk* K.pow(wavelfunc/wave0, denv)
+            VcomplTotal = VcomplTotal/((fstar*K.pow(wavelfunc/wave0, dstar))+(fsec * K.pow(wavelfunc/wave0,dsec)) +((1-fstar-fsec)*K.pow(wavelfunc/wave0,denv)))
+            return VcomplTotal
+
+
+        def data_loss(y_true, y_pred):
+            y_pred = tf.squeeze(y_pred,axis = 3)
+            y_pred = (y_pred+1)/2
+            y_pred = tf.cast((y_pred),tf.complex128)
+            y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
+            ftImages = tf.signal.fft2d(y_pred)#is complex!!
+            ftImages = tf.signal.fftshift(ftImages,axes=(1,2))
+            coordsMax = [[[[0,int(npix/2),int(npix/2)]]]]
+            ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
+            VcomplForV2 = compTotalCompVis(ftImages, u, v, waveV2)
+            V2image = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images
+
+            V2Chi2Terms = K.pow(V2 - V2image,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
+            #V2Chi2Terms = V2Chi2Terms
+            V2loss = K.sum(V2Chi2Terms, axis=1) #the squared visibility contribution to the loss
+
+            CPimage  = tf.math.angle(compTotalCompVis(ftImages, u1, v1, waveCP))
+            CPimage += tf.math.angle(compTotalCompVis(ftImages, u2, v2, waveCP))
+            CPimage -= tf.math.angle(compTotalCompVis(ftImages, u3, v3, waveCP))
+            CPchi2Terms = 2*(1-tf.math.cos(CP-CPimage))/(K.pow(CPerr,2)*nCP)
+            if useLowCPapprox:
+                CPchi2Terms=K.pow(CP-CPimage, 2)/(K.pow(CPerr,2)*nCP)
+
+            CPloss = K.sum(CPchi2Terms, axis=1)
+
+            lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
+            if forTraining == True:
+                print(V2loss, CPloss, lossValue)
+                return  tf.cast(lossValue, tf.float32)
+
+            else:
+                plotObservablesComparison(V2image, V2, V2err, CPimage, CP, CPerr)
+                print('no training')
+                print(V2loss,CPloss,lossValue)
+                return lossValue, V2loss , CPloss
+
+        self.data_loss = data_loss
+
 
 
 class ImgRec:
@@ -488,11 +742,12 @@ class ImgRec:
         else:
             V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_data()
 
+        gan = self.createGan()
 
         a = self.data_loss(  u, u1, u2, u3, v, v1, v2, v3)
 
 
-    def data_loss(self, y_true, y_pred, u, u1, u2, u3, v, v1, v2, v3):
+    def data_loss(self, y_pred, u, u1, u2, u3, v, v1, v2, v3):
         #compute the fourier transform of the images
         y_pred = tf.squeeze(y_pred, axis = 3)
         y_pred = (y_pred+1)/2
