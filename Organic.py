@@ -6,6 +6,7 @@ import tensorflow as tf
 import tensorflow.keras.layers as layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
+import tensorflow.keras.optimizers as optimizers
 from tensorflow.keras.utils import plot_model
 import os
 from astropy.io import fits
@@ -16,6 +17,9 @@ import matplotlib as mpl
 import itertools
 import ReadOIFITS as oi
 import tensorflow.keras.backend as K
+import scipy.special as sp
+import matplotlib.colors as colors
+from matplotlib.patches import Ellipse
 mpl.use('Agg')# %matplotlib inline
 
 
@@ -31,6 +35,8 @@ class bcolors:
 
 
 # Some fancy message writing...
+
+
 def header(msg):
     print(bcolors.HEADER + msg + bcolors.ENDC)
 
@@ -73,7 +79,7 @@ class GAN:
     The GAN is made from a generator and a discriminator
     """
 
-    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0002, Adam_beta_1=0.5, resetOpt=False):
+    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0001, Adam_beta_1=0.91, resetOpt=False):
         self.resetOpt = resetOpt
         self.Adam_lr = Adam_lr
         self.Adam_beta_1 = Adam_beta_1
@@ -94,7 +100,7 @@ class GAN:
 
     @staticmethod
     def getOptimizer(lr, beta1, beta2=0.999, epsilon = 1e-7):
-        return Adam(learning_rate = lr, beta_1 = beta1, beta_2 = beta2, epsilon = epsilon)
+        return Adam(learning_rate = lr, beta_1 = beta1, beta_2 = beta2, epsilon = epsilon, amsgrad=False)
 
     def read(self):
         '''
@@ -163,25 +169,37 @@ class GAN:
         return discriminator
 
 
+    """
+    create_gan
+
+    parameters:
+        discriminator: a keras sequential model (network) with outputsize = 1 and inputsize = imagesize*imagesize*1
+        generator: a keras sequential model (network) with outputsize = imagesize*imagesize*1 and inputsize = NoiseLength
+    returns:
+        gan: a compiled keras model where the generator is followed by the discriminator and the discriminator is not trainable
+
+    """
     def create_gan(self, train_disc = False):
-        """
-        create_gan
 
-        parameters:
-            discriminator: a keras sequential model (network) with outputsize = 1 and inputsize = imagesize*imagesize*1
-            generator: a keras sequential model (network) with outputsize = imagesize*imagesize*1 and inputsize = NoiseLength
-        returns:
-            gan: a compiled keras model where the generator is followed by the discriminator and the discriminator is not trainable
-
-        """
         self.dis.trainable = train_disc
         gan_input = layers.Input(shape = (self.noiselength,))
         x = self.gen(gan_input)
         gan_output= self.dis(x)
-        gan= Model(inputs=gan_input, outputs=gan_output)
+        gan= Model(inputs=gan_input, outputs=[gan_output, x])
         gan.compile(loss='binary_crossentropy', optimizer = self.opt, metrics=["accuracy"])
         return gan
 
+    '''
+    epochs: the number of iterations over a set of image with its size eaqual to the training dataset
+    batch_size: mini-batch size used for training the gan
+    saveDir: directory where the trained networks will be stored
+    PlotEpochs: the epoch interval at which examples of generated images will be created
+    Use1sidedLabelSmooth: whether ornot to use onsided label smoothing (best true when using binary binary_crossentropy, best false when using MSE (LSGAN))
+effect:
+    Trains the GAN
+    Saves plots with examples of generated images and the loss evolution of the gans components
+    Saves the trained netorks at the requested and final epochs of training
+    '''
     def train(
         self,
         images,
@@ -193,17 +211,7 @@ class GAN:
         Use1sidedLabelSmooth = False,
         saveEpochs = []
         ):
-        '''
-        epochs: the number of iterations over a set of image with its size eaqual to the training dataset
-        batch_size: mini-batch size used for training the gan
-        saveDir: directory where the trained networks will be stored
-        PlotEpochs: the epoch interval at which examples of generated images will be created
-        Use1sidedLabelSmooth: whether ornot to use onsided label smoothing (best true when using binary binary_crossentropy, best false when using MSE (LSGAN))
-    effect:
-        Trains the GAN
-        Saves plots with examples of generated images and the loss evolution of the gans components
-        Saves the trained netorks at the requested and final epochs of training
-        '''
+
         self.save_dir = save_dir
 
         self.nbatch = nbatch
@@ -297,6 +305,64 @@ class GAN:
         self.plotGanEvolution(disFakeLoss,disRealLoss,genLoss,disFakeAccuracy,genAccuracy)
 
         inform(f'Training succesfully finished.\nResults saved at {self.save_dir}')
+
+    def get_image(self, noise):
+
+        gan = self.gan
+        #random input
+        input = np.array(noise)
+        img = self.gan.predict(input)[1]
+        img = np.array(img)[0,:,:,0]
+
+        return img
+
+    def save_image(self, noise, name='image.pdf'):
+
+        bin = False
+        star = False
+        d = self.params['ps'] * self.npix/2.
+        if self.params['fsec'] > 0:
+            bin = True
+            xb = self.params['xsec']
+            yb = self.params['ysec']
+        if self.params['fstar'] >0:
+            star = True
+            UD = self.params['UDstar']
+
+        img = self.get_image(noise)
+
+        fig, ax = plt.subplots()
+        plt.imshow(img[::-1,::-1], extent=(d, -d, -d, d), cmap='hot')
+        if star:
+            ell = Ellipse((0,0), UD, UD, 0, color='white', fc = 'white', fill=True)
+            ax.add_artist(ell)
+        if bin:
+            plt.plot(xb, yb, 'g+')
+        plt.xlabel(r'$\Delta\alpha$ (mas)')
+        plt.ylabel(r'$\Delta\delta$ (mas)')
+        plt.tight_layout
+        plt.savefig(name)
+        plt.close()
+
+        return img
+
+    def get_random_image(self):
+
+        gan = self.gan
+        #random input
+        input = np.array([np.random.normal(0, 1, 100)])
+        img = self.gan.predict(input)[1]
+        img = np.array(img)[0,:,:,0]
+
+        return img
+
+
+    def save_random_image(self, name = 'randomimage.pdf'):
+        img = self.get_random_image()
+        fig, ax = plt.subplots()
+        plt.imshow(img)
+        plt.savefig(name)
+        plt.close()
 
 
     def plotGanEvolution(self, disFakeLoss, disRealLoss,
@@ -404,9 +470,10 @@ class GAN:
         plt.close()
 
 
-    def ImageReconstruction(self, data_files, sparco, data_dir='./', mu=1, epochs=200, nrestart=200, boot=False, nboot=100,
+    def ImageReconstruction(self, data_files, sparco, data_dir='./', mu=1, epochs=50, nrestart=50, boot=False, nboot=100,
                             ps=0.6, shiftPhotoCenter = True, UseRoll=True,
-                            interp = 'BILINEAR', useLowCPapprox = False, grid = False
+                            interp = 'BILINEAR', useLowCPapprox = False, grid = False,
+                            diagnostics = False
                             ):
         self.mu = mu
         self.epochs = epochs
@@ -421,6 +488,7 @@ class GAN:
         self.interp = interp
         self.grid = grid
         self.data = Data(data_dir, data_files)
+        self.diagnostics = diagnostics
 
         # Creating dictionary with image recsontruction parameters
         self.params = {
@@ -437,6 +505,7 @@ class GAN:
             'dsec' : sparco.dsec,
             'xsec' : sparco.xsec,
             'ysec' : sparco.ysec,
+            'wave0' : sparco.wave0,
         }
 
         # checking if grid of reconstructions needed
@@ -466,7 +535,7 @@ class GAN:
             self.ngrid = ngrid
             self.gridpars = gridpars
             self.gridvals = gridvals
-            print(gridvals)
+            #print(gridvals)
             self.iterable = itertools.product(*self.gridvals)
             inform(f'Making an image reconstruction grid ({niters} reconstructions) on {ngrid} parameter(s): {gridpars}')
             self.runGrid()
@@ -483,51 +552,134 @@ class GAN:
                 self.params[f'{pars}'] = i[p]
                 state += f' {pars}={i[p]}'
                 dir += f'_{pars}={i[p]}'
+            os.makedirs(dir, exist_ok=True)
             inform2(f'Image reconstruction with{state}')
+
             self.dir = dir
             self.ImgRec()
 
     def SingleImgRec(self):
-        print('prout')
+        inform2(f'Single image reconstruction started')
+        os.makedirs(self.dir, exist_ok=True)
+        self.ImgRec()
 
     def ImgRec(self ):
         params = self.params
+        mu = params['mu']
         #Create data loss
-        self.data_loss = self.dataloss
-        # Create the GAN
-        # GAN = self.createGAN() NO NEED
+        data_loss = self.set_dataloss()
 
         # Update GAN
         GeneratorCopy = tf.keras.models.clone_model(self.gen)
         GeneratorCopy.set_weights(self.gen.get_weights())
         outdir = os.path.join(os.getcwd(),self.dir)
-        for r in range(params['nrestart']):
+
+        Chi2s, DisLoss = [], []
+        Images = []
+        iteration = range(params['nrestart'])
+        if self.diagnostics:
+            print('#restart\tftot\tfdata\tfdiscriminator')
+        for r in iteration:
             #GeneratorCopy.set_weights(Generator.get_weights())
+
             if self.gan != None:
                 self.gan.get_layer(index=1).set_weights(self.gen.get_weights())
                 if self.resetOpt == True:
                     opt = 'optimizers.'+self.opt._name
                     opt = eval(opt)
                     opt = opt.from_config(self.opt.get_config())
-                    self.gan.compile(loss=[CrossEntropy ,dataLikelihood],optimizer= opt,loss_weights=[params['mu'],1])
+                    self.gan.compile(loss=[CrossEntropy, data_loss], optimizer= opt,loss_weights=[mu,1])
 
             # generating the noise vector for this restart
             noisevector = np.array([np.random.normal(0, 1, 100)])
             y_gen = [np.ones(1),np.ones(1)]
 
             # the loop on epochs with one noise vector
-            discloss = []
-            chi2 = []
-            for e in range(1, params['epochs']+1 ):
-                print(e)
+            if self.diagnostics:
+                discloss = []
+                chi2 = []
+            epochs = range(1, params['epochs']+1)
+            for e in  epochs:
                 #generate  random noise as an input  to  initialize the  generator
                 hist= self.gan.train_on_batch(noisevector, y_gen)
-                discloss.append( hyperParam*hist[1] )
-                chi2.append( hist[2] )
-                #plot the image at the specified epochs
-                if e in plotAtEpoch:
-                    plot_generated_images2(e, self.fullNet.get_layer(index=1), noisevector, image_Size, pixelSize, saveDir)
-                    plt.close()
+
+                if self.diagnostics:
+                    discloss.append( mu*hist[1] )
+                    chi2.append( hist[2] )
+
+
+
+            img = self.get_image(noisevector)
+            if self.diagnostics:
+                self.give_imgrec_diagnostics(hist, chi2, discloss, r, epochs, mu)
+                self.save_image(noisevector, name=f'{self.dir}/Image_restart{r}.pdf')
+
+            Chi2s.append(hist[2])
+            DisLoss.append(hist[1])
+            Images.append(img)
+
+        self.saveCube(Images, [Chi2s, DisLoss])
+
+
+    def saveCube(self, cube, losses):
+        header = fits.Header()
+        header['SIMPLE'] = 'T'
+        header['BITPIX']  = -64
+        header['NAXIS'] = 2
+        header['NAXIS1'] = imageSize
+        header['NAXIS2']  =  imageSize
+        if depth != None:
+            header['NAXIS3']  =  depth
+        header['EXTEND']  = 'T'
+        header['CTYPE1']  = 'X [arcsec]'
+        header['CTYPE2']  = 'Y [arcsec]'
+        header['CRVAL1']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRVAL2']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRPIX1']  =  imageSize/2
+        header['CRPIX2']  =  imageSize/2
+        header['CTYPE1']  = ('milliarcsecond', 'RA in mas')
+        header['CTYPE2']  = ('milliarcsecond', 'DEC in mas')
+        header['CDELT1'] = pixelSize
+        header['CDELT2'] = pixelSize
+        header['CRVAL1'] =0
+        header['CRVAL2'] =0
+        if depth != None:
+            header['CDELT3']  =  1.
+            header['CTYPE3']  = ctype3
+        if self.useSparco == True:
+            header['x'] = (self.x,'x coordinate of the point source')
+            header['y']= (self.y ,'coordinate of the point source')
+            header['UDf'] = self.UDflux ,'flux contribution of the uniform disk'
+            header['UDd'] = (self.UDdiameter, 'diameter of the point source')
+            header['pf'] = (self.PointFlux,'flux contribution of the point source')
+            header['denv'] = (self.denv,'spectral index of the environment')
+            header['dsec'] = (self.dsec,'spectral index of the point source')
+        if chi2s != None:
+            header['Totchi2'] = (chi2s[0],'the total reduced chi squared')
+            header['V2chi2'] = (chi2s[1],'the reduced chi squared for the squared visibilities')
+            header['CPchi2'] = (chi2s[2],'the reduced chi squared for the closure phases')
+            header['fprior'] = (chi2s[3],'the f_prior value')
+        for c in comment:
+            header['COMMENT'] = c
+        prihdu = fits.PrimaryHDU(Image,header=header)
+        prihdu.writeto(Name+'.fits',overwrite=True)
+
+            #y_pred = self.gan.predict(noisevector)[1]
+            #self.data_loss([1], y_pred, training = False)
+
+    def give_imgrec_diagnostics(self, hist, chi2, discloss, r, epochs, mu):
+        print(r, hist[0], hist[2], mu*hist[1], sep='\t')
+        fig, ax = plt.subplots()
+        plt.plot(epochs, chi2, label='f_data')
+        plt.plot(epochs, discloss, label='mu * f_discriminator')
+        plt.plot(epochs, np.array(chi2)+np.array(discloss), label='f_tot')
+        plt.legend()
+        plt.xlabel('#restart')
+        plt.ylabel('Losses')
+        plt.yscale('log')
+        plt.tight_layout
+        plt.savefig(f'{self.dir}/lossevol_restart{r}.pdf')
+        plt.close()
 
     def createGAN(self):
         # Loading networks
@@ -543,7 +695,7 @@ class GAN:
         gan.compile(loss=losses, optimizer= opt, loss_weights=[mu,1])
 
 
-    def dataloss(self):
+    def set_dataloss(self):
         data = self.data
         if self.boot:
             V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_bootstrap()
@@ -551,20 +703,26 @@ class GAN:
             V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_data()
 
         params = self.params
+
+        MAS2RAD = np.pi*0.001/(3600*180)
+
         fstar = params['fstar']
         fsec = params['fsec']
-        UD = params['UDstar']
+        UD = params['UDstar'] *MAS2RAD
+        dstar = params['dstar']
         denv = params['denv']
         dsec = params['dsec']
-        xsec = params['xsec']
-        ysec = params['ysec']
+        xsec = params['xsec'] *MAS2RAD
+        ysec = params['ysec'] *MAS2RAD
         ps = params['ps']
         wave0 = params['wave0']
         useLowCPapprox = params['useLowCPapprox']
         nV2 = len(V2)
         nCP = len(CP)
-        npix = 128 ## to CHANGE TO GRAB FROM THE GAN
+        npix = self.npix
         spacialFreqPerPixel = (3600/(0.001*npix*ps))*(180/np.pi)
+
+        assert nV2 > 0
 
         def offcenterPointFT(x, y, u, v):
             u = tf.constant(u,dtype = tf.complex128)
@@ -591,45 +749,43 @@ class GAN:
         def plotObservablesComparison(V2generated, V2observed, V2err, CPgenerated, CPobserved, CPerr):
 
             #v2 with residual comparison, no colors indicating wavelength
-            plt.figure(figsize=(3.5, 6))
-            gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
-            ax1=plt.subplot(gs[0]) # sharex=True)
+            fig, ax = plt.subplots(figsize=(3.5, 6))
             absB = (np.sqrt(u**2+v**2)/(10**6))
-            plt.scatter(absB, V2generated[0].numpy(), marker='.',s=40, label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
+            plt.scatter(absB, V2generated[0], marker='.',s=40, label = 'image',c = 'b',alpha=0.4,edgecolors ='k',linewidth=0.15)
             plt.scatter(absB,V2observed,marker='*',s=40,label = 'observed',c = 'r',alpha=0.4,edgecolors ='k',linewidth=0.15)
             plt.errorbar(absB,V2observed,V2err,elinewidth=0.2,ls='none',c ='r')
             plt.ylim(0,1)
             plt.ylabel(r'$V^2$')
             plt.legend()
 
-            plt.setp(ax1.get_xticklabels(), visible=False)
-            plt.subplot(gs[1], sharex=ax1)
-            plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',alpha=0.6,edgecolors ='k',linewidth=0.1)
-            plt.ylabel(r'residuals',fontsize =12)
-            plt.xlabel(r'$\mid B\mid (M\lambda)$')
-            plt.tight_layout()
-            if bootstrapDir == None:
-                plt.savefig(os.path.join(os.getcwd(),'V2comparisonNoColor.png'))
-            else:
-                plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/V2comparisonNoColor.png'))
+            #plt.setp(ax1.get_xticklabels(), visible=False)
+            #plt.subplot(gs[1], sharex=ax1)
+            #plt.scatter(absB,((V2observed-V2generated[0].numpy())/(V2err)),s=30,marker='.',c = 'b',alpha=0.6,edgecolors ='k',linewidth=0.1)
+            #plt.ylabel(r'residuals',fontsize =12)
+            #plt.xlabel(r'$\mid B\mid (M\lambda)$')
+            #plt.tight_layout()
+            #if bootstrapDir == None:
+            #    plt.savefig(os.path.join(os.getcwd(),'V2comparisonNoColor.png'))
+            #else:
+            plt.savefig(os.path.join(os.getcwd(),'V2comparisonNoColor.png'))
+            plt.close()
 
             #plots the uv coverage
             plt.figure()
-            plt.scatter(u/(10**6),v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
-            plt.scatter(-u/(10**6),-v/(10**6),marker='.',c=np.real(wavelV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+            plt.scatter(u/(10**6),v/(10**6),marker='.',c=np.real(waveV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
+            plt.scatter(-u/(10**6),-v/(10**6),marker='.',c=np.real(waveV2),cmap ='rainbow',alpha=0.9,edgecolors ='k',linewidth=0.1)
             plt.xlabel(r'$ u (M\lambda)$')
             plt.ylabel(r'$ v (M\lambda)$')
             plt.gca().set_aspect('equal', adjustable='box')
-            if bootstrapDir == None:
-                plt.savefig(os.path.join(os.getcwd(), 'uvCoverage.png'))
-            else:
-                plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/uvCoverage.png'))
+
+            plt.savefig(os.path.join(os.getcwd(), 'uvCoverage.png'))
+            plt.close()
 
 
             #cp with residual comparison without color indicating wavelength
-            plt.figure(figsize=(3.5, 6))
-            gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
-            ax1=plt.subplot(gs[0]) # sharex=True)
+            fig, ax = plt.subplots(figsize=(3.5, 6))
+            #gs = gridspec.GridSpec(2, 1, height_ratios=[6, 3])
+            #ax1=plt.subplot(gs[0]) # sharex=True)
             maxB = (np.maximum(np.maximum(np.sqrt(u1**2 +v1**2),np.sqrt(u2**2 +v2**2)),np.sqrt(u3**2 +v3**2))/(10**6))
             plt.scatter(maxB,CPgenerated[0].numpy(),s=30,marker='.',c = 'b',label = 'image',cmap ='rainbow',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
             plt.scatter(maxB,CPobserved,s=30,marker='*',label = 'observed',c = 'r',alpha=0.4,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
@@ -637,19 +793,17 @@ class GAN:
             plt.legend()
             plt.ylabel(r'closure phase(radian)',fontsize =12)
 
-            plt.setp(ax1.get_xticklabels(), visible=False)
-            plt.subplot(gs[1], sharex=ax1)
-            plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr)),s=30,marker='.',c = 'b',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
+            #plt.setp(ax1.get_xticklabels(), visible=False)
+            #plt.subplot(gs[1], sharex=ax1)
+            #plt.scatter(maxB,((CPobserved-CPgenerated[0].numpy())/(CPerr)),s=30,marker='.',c = 'b',cmap ='rainbow',alpha=0.6,edgecolors =colors.to_rgba('k', 0.1), linewidth=0.3)
             #color = colors.to_rgba(np.real(wavelCP.numpy())[], alpha=None) #color = clb.to_rgba(waveV2[])
             #c[0].set_color(color)
 
             plt.xlabel(r'max($\mid B\mid)(M\lambda)$',fontsize =12)
-            plt.ylabel(r'residuals',fontsize =12)
+            #plt.ylabel(r'residuals',fontsize =12)
             plt.tight_layout()
-            if bootstrapDir == None:
-                plt.savefig(os.path.join(os.getcwd(),'cpComparisonNoColor.png'))
-            else:
-                plt.savefig(os.path.join(os.getcwd(),bootstrapDir+ '/cpComparisonNoColor.png'))
+            plt.savefig(os.path.join(os.getcwd(),'cpComparisonNoColor.png'))
+
             plt.close()
 
 
@@ -661,7 +815,7 @@ class GAN:
             #see extra function
             ftSecondary = offcenterPointFT( xsec, ysec, ufunc, vfunc)
             # get the total visibility amplitudes
-            VcomplDisk = bilinearInterp(ftImages,(vfunc/spacialFreqPerPixel)+int(ImageSize/2),(ufunc/spacialFreqPerPixel)+int(ImageSize/2))
+            VcomplDisk = bilinearInterp(ftImages,(vfunc/spacialFreqPerPixel)+int(npix/2),(ufunc/spacialFreqPerPixel)+int(npix/2))
             #equation 4 in sparco paper:
             VcomplTotal = fstar * ftPrimary* K.pow(wavelfunc/wave0, dstar)
             VcomplTotal += fsec * ftSecondary* K.pow(wavelfunc/wave0, dsec)
@@ -670,153 +824,60 @@ class GAN:
             return VcomplTotal
 
 
-        def data_loss(y_true, y_pred):
-            y_pred = tf.squeeze(y_pred,axis = 3)
+        def data_loss(y_true, y_pred, training = True):
+
+            #img = y_pred.numpy()[0,:,:,0]
+            y_pred = tf.squeeze(y_pred, axis = 3)
             y_pred = (y_pred+1)/2
-            y_pred = tf.cast((y_pred),tf.complex128)
-            y_pred = tf.signal.ifftshift(y_pred,axes = (1,2))
+            y_pred = tf.cast((y_pred), tf.complex128)
+            y_pred = tf.signal.ifftshift(y_pred, axes = (1,2))
             ftImages = tf.signal.fft2d(y_pred)#is complex!!
-            ftImages = tf.signal.fftshift(ftImages,axes=(1,2))
+            ftImages = tf.signal.fftshift(ftImages, axes=(1,2))
+
+            # print(img)
+            # print(img.shape)
+            # fig, [ax1, ax2] = plt.subplots(ncols = 2)
+            # ax1.imshow(img)
+            #
+            # print(ftImages)
+            # print(ftImages.shape)
+            # FTimg = np.array(ftImages[0,:,:,0])
+            # ax2.imshow(np.abs(ftImages))
+            # plt.savefig('showImagesFT.pdf')
+            # plt.close()
+
             coordsMax = [[[[0,int(npix/2),int(npix/2)]]]]
             ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
             VcomplForV2 = compTotalCompVis(ftImages, u, v, waveV2)
             V2image = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images
 
-            V2Chi2Terms = K.pow(V2 - V2image,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
+
+
+            V2Chi2Terms = K.pow(V2 - V2image,2)/(K.pow(V2e,2)*nV2)# individual terms of chi**2 for V**2
             #V2Chi2Terms = V2Chi2Terms
-            V2loss = K.sum(V2Chi2Terms, axis=1) #the squared visibility contribution to the loss
+            V2loss = K.sum(V2Chi2Terms, axis=1)
 
             CPimage  = tf.math.angle(compTotalCompVis(ftImages, u1, v1, waveCP))
             CPimage += tf.math.angle(compTotalCompVis(ftImages, u2, v2, waveCP))
             CPimage -= tf.math.angle(compTotalCompVis(ftImages, u3, v3, waveCP))
-            CPchi2Terms = 2*(1-tf.math.cos(CP-CPimage))/(K.pow(CPerr,2)*nCP)
+            CPchi2Terms = 2*(1-tf.math.cos(CP-CPimage))/(K.pow(CPe,2)*nCP)
             if useLowCPapprox:
-                CPchi2Terms=K.pow(CP-CPimage, 2)/(K.pow(CPerr,2)*nCP)
+                CPchi2Terms=K.pow(CP-CPimage, 2)/(K.pow(CPe,2)*nCP)
 
             CPloss = K.sum(CPchi2Terms, axis=1)
 
             lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
-            if forTraining == True:
-                print(V2loss, CPloss, lossValue)
+            if training == True:
+                #plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
                 return  tf.cast(lossValue, tf.float32)
 
             else:
-                plotObservablesComparison(V2image, V2, V2err, CPimage, CP, CPerr)
-                print('no training')
-                print(V2loss,CPloss,lossValue)
+                plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
                 return lossValue, V2loss , CPloss
 
         self.data_loss = data_loss
+        return data_loss
 
-
-
-class ImgRec:
-    def __init__(self, data, gen, dis, sparco, mu=1, epochs=100, ps=0.5,
-                            boot=0, nrestart = 200,
-                            shiftPhotoCenter = True, UseRoll=True,
-                            interp = 'BILINEAR', useLowCPapprox = False):
-        self.mu = mu
-        self.epochs = epochs
-        self.ps = ps
-        self.boot = boot
-        self.nrestart = nrestart
-        self.useLowCPapprox = useLowCPapprox
-        self.datafiles = datafiles
-        self.sparco = sparco
-        self.data_dir = dataDir
-        self.shiftPhotoCenter = shiftPhotoCenter
-        self.use_roll = UseRoll
-        self.interp = interp
-        self.gen = gen
-        self.dis = dis
-        self.sparco = sparco
-        self.dataset = data
-        self.imgrec()
-
-    def imgrec(self):
-
-        # First data loading and selection
-        data = self.dataset
-        if self.boot >= 1:
-            V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_bootstrap()
-        else:
-            V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_data()
-
-        gan = self.createGan()
-
-        a = self.data_loss(  u, u1, u2, u3, v, v1, v2, v3)
-
-
-    def data_loss(self, y_pred, u, u1, u2, u3, v, v1, v2, v3):
-        #compute the fourier transform of the images
-        y_pred = tf.squeeze(y_pred, axis = 3)
-        y_pred = (y_pred+1)/2
-        y_pred = tf.cast( (y_pred), tf.complex128)
-        y_pred = tf.signal.ifftshift(y_pred, axes = (1,2))
-        ftImages = tf.signal.fft2d(y_pred)#is complex!!
-        ftImages = tf.signal.fftshift(ftImages, axes=(1,2))
-        coordsMax = [[[[0,int(self.npix/2),int(self.npix/2)]]]]
-        ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
-        VcomplForV2 = compTotalCompVis(ftImages,u,v,wavelV2)
-        V2generated = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images
-
-        V2Chi2Terms = K.pow(V2observed - V2generated,2)/(K.pow(V2err,2)*nV2)# individual terms of chi**2 for V**2
-        #V2Chi2Terms = V2Chi2Terms
-        V2loss = K.sum(V2Chi2Terms,axis=1) #the squared visibility contribution to the loss
-
-        CPgenerated  = tf.math.angle(compTotalCompVis(ftImages,u1,v1,wavelCP))
-        CPgenerated += tf.math.angle(compTotalCompVis(ftImages,u2,v2,wavelCP))
-        CPgenerated -= tf.math.angle(compTotalCompVis(ftImages,u3,v3,wavelCP))
-        CPchi2Terms = 2*(1-tf.math.cos(CPobserved-CPgenerated))/(K.pow(CPerr,2)*nCP)
-        if useLowCPapprox == True:
-            CPchi2Terms=K.pow(CPobserved-CPgenerated,2)/(K.pow(CPerr,2)*nCP)
-
-        CPloss = K.sum(CPchi2Terms,axis=1)
-
-        lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
-        if forTraining == True:
-            print(V2loss,CPloss,lossValue)
-            return  tf.cast(lossValue,tf.float32)
-
-        else:
-            plotObservablesComparison(V2generated,V2observed,V2err,CPgenerated,CPobserved,CPerr)
-            print('no training')
-            print(V2loss,CPloss,lossValue)
-            return lossValue, V2loss , CPloss
-
-
-    @staticmethod
-    def offcenterPointFT(x,y,u,v):
-        u = tf.constant(u,dtype = tf.complex128)
-        v = tf.constant(v,dtype = tf.complex128)
-        return tf.math.exp(-2*np.pi*1j*(x*u+y*v))
-
-
-    @staticmethod
-    def bilinearInterp(grid,ufunc,vfunc):
-    #preforms a binlinear interpolation on grid at continious pixel coordinates ufunc,vfunc
-        ubelow = np.floor(ufunc).astype(int)
-        vbelow = np.floor(vfunc).astype(int)
-        uabove = ubelow +1
-        vabove = vbelow +1
-        coords = tf.constant([[[0,ubelow[i],vbelow[i]] for i in range(len(ufunc))]])
-        interpValues =  tf.gather_nd(grid,coords)*(uabove-ufunc)*(vabove-vfunc)
-        coords1 =tf.constant([[[0,uabove[i],vabove[i]] for i in range(len(ufunc))]])
-        interpValues += tf.gather_nd(grid,coords1)*(ufunc-ubelow)*(vfunc-vbelow)
-        coords2 = tf.constant([[[0,uabove[i],vbelow[i]] for i in range(len(ufunc))]])
-        interpValues +=  tf.gather_nd(grid,coords2)*(ufunc-ubelow)*(vabove-vfunc)
-        coords3 = tf.constant([[[0,ubelow[i],vabove[i]] for i in range(len(ufunc))]])
-        interpValues += tf.gather_nd(grid,coords3)*(uabove-ufunc)*(vfunc-vbelow)
-        return interpValues
-
-    def dataloss(self):
-        data = oi.read()
-        # SPARCO HERE!!!!
-        x = sparco.xsec *np.pi*0.001/(3600*180)
-        y = sparco.ysec *np.pi*0.001/(3600*180)
-        fstar = sparco.fstar # UDflux
-        fsec = sparco.fsec # Pointflux
-        UDstar = sparco.UDstar # UDdiameter
 
 
 class Data:
@@ -883,9 +944,9 @@ class Data:
 
 
 class SPARCO:
-    def __init__(self, wavel0=1.65e-6, fstar=0.0, dstar=-4.0, denv=0.0, UDstar=0.01, fsec=0.0,
+    def __init__(self, wave0=1.65e-6, fstar=0.6, dstar=-4.0, denv=0.0, UDstar=0.01, fsec=0.0,
                         dsec=-4, xsec = 0.0, ysec = 0.0):
-        self.wavel0 = wavel0
+        self.wave0 = wave0
         self.fstar = fstar
         self.dstar = dstar
         self.denv = denv
