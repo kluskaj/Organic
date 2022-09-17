@@ -1,6 +1,5 @@
 import Organic as org
 import os
-
 import matplotlib.pyplot as plt
 
 
@@ -18,7 +17,7 @@ def main():
     sparco = org.SPARCO(fstar = 0.6179, denv = 0.286, dsec = -2, xsec = -0.36, ysec = -1.33, fsec = 0.0175, UDstar = 0.5)
 
     # Launching image reconstruction
-    test.ImageReconstruction(datafiles, sparco, data_dir = datafolder, mu=1, ps=0.6, diagnostics=False)
+    test.ImageReconstruction(datafiles, sparco, data_dir = datafolder, mu=[0.1, 1, 10], ps=0.6, diagnostics=False, epochs=50, nrestart=50, name='diagnostics')
 
 
 if __name__ == "__main__":

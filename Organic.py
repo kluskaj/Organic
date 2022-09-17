@@ -20,6 +20,8 @@ import tensorflow.keras.backend as K
 import scipy.special as sp
 import matplotlib.colors as colors
 from matplotlib.patches import Ellipse
+import sys
+import shutil
 mpl.use('Agg')# %matplotlib inline
 
 
@@ -316,8 +318,7 @@ effect:
 
         return img
 
-    def save_image(self, noise, name='image.pdf'):
-
+    def plot_image(self, img, name='image.pdf', chi2=''):
         bin = False
         star = False
         d = self.params['ps'] * self.npix/2.
@@ -329,15 +330,15 @@ effect:
             star = True
             UD = self.params['UDstar']
 
-        img = self.get_image(noise)
 
         fig, ax = plt.subplots()
-        plt.imshow(img[::-1,::-1], extent=(d, -d, -d, d), cmap='hot')
+        plt.imshow(img[::-1,:], extent=(d, -d, -d, d), cmap='hot')
         if star:
             ell = Ellipse((0,0), UD, UD, 0, color='white', fc = 'white', fill=True)
             ax.add_artist(ell)
         if bin:
             plt.plot(xb, yb, 'g+')
+        plt.text(0.9*d, 0.9*d, chi2,c='white')
         plt.xlabel(r'$\Delta\alpha$ (mas)')
         plt.ylabel(r'$\Delta\delta$ (mas)')
         plt.tight_layout
@@ -345,6 +346,12 @@ effect:
         plt.close()
 
         return img
+
+    def save_image_from_noise(self, noise, name='image.pdf'):
+
+
+        img = self.get_image(noise)
+        self.plot_image(img, name=name)
 
     def get_random_image(self):
 
@@ -473,7 +480,7 @@ effect:
     def ImageReconstruction(self, data_files, sparco, data_dir='./', mu=1, epochs=50, nrestart=50, boot=False, nboot=100,
                             ps=0.6, shiftPhotoCenter = True, UseRoll=True,
                             interp = 'BILINEAR', useLowCPapprox = False, grid = False,
-                            diagnostics = False
+                            diagnostics = False, name=''
                             ):
         self.mu = mu
         self.epochs = epochs
@@ -489,6 +496,23 @@ effect:
         self.grid = grid
         self.data = Data(data_dir, data_files)
         self.diagnostics = diagnostics
+        self.dir0 = name
+
+
+        if self.dir0 != '':
+            try:
+                os.makedirs( self.dir0 )
+            except FileExistsError:
+                underline('Working in an already existing folder:')
+                print(os.path.join(os.getcwd(), self.dir0))
+            os.chdir(self.dir0)
+        else:
+            warn(f'Will put all the outputs in {os.getcwd()}')
+            warn(f'It may overwrite files if they already exist!')
+
+        # copy the data file to the directory
+        shutil.copyfile(os.path.join(data_dir, data_files), os.path.join(os.getcwd(), 'OIData.fits'))
+
 
         # Creating dictionary with image recsontruction parameters
         self.params = {
@@ -552,15 +576,33 @@ effect:
                 self.params[f'{pars}'] = i[p]
                 state += f' {pars}={i[p]}'
                 dir += f'_{pars}={i[p]}'
-            os.makedirs(dir, exist_ok=True)
-            inform2(f'Image reconstruction with{state}')
 
             self.dir = dir
+            try:
+                os.makedirs(dir)
+            except FileExistsError:
+                fail(f'The following folder already exists: {os.path.join(os.getcwd(), self.dir)}')
+                fail(f'Please define another folder by changing the name keyword')
+                fail(f'in the ImageReconstruction command')
+                sys.exit(0)
+
+
+            inform2(f'Image reconstruction with{state}')
+
+
             self.ImgRec()
 
     def SingleImgRec(self):
         inform2(f'Single image reconstruction started')
-        os.makedirs(self.dir, exist_ok=True)
+        self.dir = 'ImageRec'
+        try:
+            os.makedirs(self.dir)
+        except FileExistsError:
+            fail(f'The following folder already exists: {os.path.join(os.getcwd(), self.dir)}')
+            fail(f'Please define another folder by changing the name keyword')
+            fail(f'in the ImageReconstruction command')
+            sys.exit(0)
+
         self.ImgRec()
 
     def ImgRec(self ):
@@ -576,6 +618,7 @@ effect:
 
         Chi2s, DisLoss = [], []
         Images = []
+        Vectors = []
         iteration = range(params['nrestart'])
         if self.diagnostics:
             print('#restart\tftot\tfdata\tfdiscriminator')
@@ -610,59 +653,290 @@ effect:
 
 
             img = self.get_image(noisevector)
+            img = (img+1)/2
             if self.diagnostics:
                 self.give_imgrec_diagnostics(hist, chi2, discloss, r, epochs, mu)
-                self.save_image(noisevector, name=f'{self.dir}/Image_restart{r}.pdf')
+                self.save_image_from_noise(noisevector, name=f'{self.dir}/Image_restart{r}.pdf')
 
             Chi2s.append(hist[2])
             DisLoss.append(hist[1])
-            Images.append(img)
+            Images.append(img[:,::-1])
+            Vectors.append(noisevector)
 
         self.saveCube(Images, [Chi2s, DisLoss])
+        self.saveImages(Images, [Chi2s, DisLoss])
+        self.plotLossEvol(Chi2s, DisLoss)
+
+    def saveImages(self, image, losses):
+        # first find the median
+        medianImage = np.median(image, axis=0)
+        medianImage /= np.sum(medianImage)
+        median = np.reshape(medianImage[:,::-1]*2 -1, (1,self.npix,self.npix,1))
+        # get the associated losses
+        fdata = self.data_loss(1, median).numpy()
+        frgl = self.dis.predict(median)[0,0]
+        ftot = fdata + self.params['mu'] * frgl
+        # plot image
+        self.plot_image(medianImage, name=os.path.join(os.getcwd(),self.dir,'MedianImage.pdf'), chi2=f'chi2={fdata:.1f}')
+        # save image
+        self.imagetofits(medianImage, ftot, fdata, frgl, name=os.path.join(os.getcwd(),self.dir,'MedianImage.fits'))
+
+        # Same but for best image
+        fdata = np.array(losses[0])
+        frgl = np.array(losses[1])
+        ftot = fdata + frgl
+        id = np.argmin(ftot)
+        best = image[id]
+        fdatabest = fdata[id]
+        frglbest = frgl[id]
+        # plot image
+        self.plot_image(best, name=os.path.join(os.getcwd(),self.dir,'BestImage.pdf'), chi2=f'chi2={fdatabest:.1f}')
+        # save image
+        self.imagetofits(median, ftot[id], fdatabest, frglbest, name=os.path.join(os.getcwd(),self.dir,'BestImage.fits'))
 
 
-    def saveCube(self, cube, losses):
+    def imagetofits(self, image, ftot, fdata, frgl, name='Image.fits'):
+        Params = self.params
+        mu = Params['mu']
+        npix = self.npix
+
         header = fits.Header()
+
         header['SIMPLE'] = 'T'
         header['BITPIX']  = -64
+
         header['NAXIS'] = 2
-        header['NAXIS1'] = imageSize
-        header['NAXIS2']  =  imageSize
-        if depth != None:
-            header['NAXIS3']  =  depth
+        header['NAXIS1'] = npix
+        header['NAXIS2']  =  npix
+
         header['EXTEND']  = 'T'
-        header['CTYPE1']  = 'X [arcsec]'
-        header['CTYPE2']  = 'Y [arcsec]'
         header['CRVAL1']  = (0.0,'Coordinate system value at reference pixel')
         header['CRVAL2']  = (0.0,'Coordinate system value at reference pixel')
-        header['CRPIX1']  =  imageSize/2
-        header['CRPIX2']  =  imageSize/2
+        header['CRPIX1']  =  npix/2
+        header['CRPIX2']  =  npix/2
         header['CTYPE1']  = ('milliarcsecond', 'RA in mas')
         header['CTYPE2']  = ('milliarcsecond', 'DEC in mas')
-        header['CDELT1'] = pixelSize
-        header['CDELT2'] = pixelSize
-        header['CRVAL1'] =0
-        header['CRVAL2'] =0
-        if depth != None:
-            header['CDELT3']  =  1.
-            header['CTYPE3']  = ctype3
-        if self.useSparco == True:
-            header['x'] = (self.x,'x coordinate of the point source')
-            header['y']= (self.y ,'coordinate of the point source')
-            header['UDf'] = self.UDflux ,'flux contribution of the uniform disk'
-            header['UDd'] = (self.UDdiameter, 'diameter of the point source')
-            header['pf'] = (self.PointFlux,'flux contribution of the point source')
-            header['denv'] = (self.denv,'spectral index of the environment')
-            header['dsec'] = (self.dsec,'spectral index of the point source')
-        if chi2s != None:
-            header['Totchi2'] = (chi2s[0],'the total reduced chi squared')
-            header['V2chi2'] = (chi2s[1],'the reduced chi squared for the squared visibilities')
-            header['CPchi2'] = (chi2s[2],'the reduced chi squared for the closure phases')
-            header['fprior'] = (chi2s[3],'the f_prior value')
-        for c in comment:
-            header['COMMENT'] = c
-        prihdu = fits.PrimaryHDU(Image,header=header)
-        prihdu.writeto(Name+'.fits',overwrite=True)
+        header['CDELT1'] = -1 * Params['ps']
+        header['CDELT2'] = Params['ps']
+
+
+        header['SWAVE0'] = (Params['wave0'], 'SPARCO central wavelength in (m)')
+        header['SPEC0'] = 'pow'
+        header['SIND0'] = (Params['denv'], 'spectral index of the image')
+
+        header['SNMODS'] = (2, 'number of SPARCO parameteric models')
+
+        header['SMOD1'] = ('UD', 'model for the primary')
+        header['SFLU1'] = (Params['fstar'], 'SPARCO flux ratio of primary')
+        header['SPEC1'] = 'pow'
+        header['SDEX1'] = (0, 'dRA Position of primary')
+        header['SDEY1'] = (0, 'dDEC position of primary')
+        header['SIND1'] = (Params['dstar'], 'Spectral index of primary')
+        header['SUD1'] = (Params['UDstar'], 'UD diameter of primary')
+
+
+        header['SMOD2'] = 'star'
+        header['SFLU2'] = (Params['fsec'], 'SPARCO flux ratio of secondary')
+        header['SPEC2'] = 'pow'
+        header['SDEX2'] = (Params['xsec'], 'dRA Position of secondary')
+        header['SDEY2'] = (Params['ysec'], 'dDEC position of secondary')
+        header['SIND2'] = (Params['dsec'], 'Spectral index of secondary')
+
+        header['NEPOCHS'] = Params['epochs']
+        header['NRSTARTS'] = Params['nrestart']
+
+        header['FTOT'] = ftot
+        header['FDATA'] = fdata
+        header['FRGL'] = frgl
+
+
+        # Make the headers
+        prihdu = fits.PrimaryHDU(image, header=header)
+
+        hdul = fits.HDUList([prihdu])
+
+        hdul.writeto(os.path.join(self.dir, name), overwrite=True)
+
+
+    def plotLossEvol(self, Chi2, DisLoss):
+        fig, ax = plt.subplots()
+        plt.plot( Chi2, label='f_data')
+        plt.plot( DisLoss, label='mu * f_discriminator')
+        plt.plot( np.array(Chi2)+np.array(DisLoss), label='f_tot')
+        plt.legend()
+        plt.xlabel('#restart')
+        plt.ylabel('Losses')
+        plt.yscale('log')
+        plt.tight_layout
+        plt.savefig(f'{self.dir}/lossevol.pdf')
+        plt.close()
+
+    def saveCube(self, cube, losses):
+        Params = self.params
+        mu = Params['mu']
+        npix = self.npix
+
+        header = fits.Header()
+
+        header['SIMPLE'] = 'T'
+        header['BITPIX']  = -64
+
+        header['NAXIS'] = 3
+        header['NAXIS1'] = npix
+        header['NAXIS2']  =  npix
+        header['NAXIS3']  =  Params['nrestart']
+
+        header['EXTEND']  = 'T'
+        header['CRVAL1']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRVAL2']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRPIX1']  =  npix/2
+        header['CRPIX2']  =  npix/2
+        header['CTYPE1']  = ('milliarcsecond', 'RA in mas')
+        header['CTYPE2']  = ('milliarcsecond', 'DEC in mas')
+        header['CDELT1'] = -1 * Params['ps']
+        header['CDELT2'] = Params['ps']
+
+        header['CDELT3']  =  1.
+        header['CTYPE3']  = 'Nrestart'
+
+        header['SWAVE0'] = (Params['wave0'], 'SPARCO central wavelength in (m)')
+        header['SPEC0'] = 'pow'
+        header['SIND0'] = (Params['denv'], 'spectral index of the image')
+
+        header['SNMODS'] = (2, 'number of SPARCO parameteric models')
+
+        header['SMOD1'] = ('UD', 'model for the primary')
+        header['SFLU1'] = (Params['fstar'], 'SPARCO flux ratio of primary')
+        header['SPEC1'] = 'pow'
+        header['SDEX1'] = (0, 'dRA Position of primary')
+        header['SDEY1'] = (0, 'dDEC position of primary')
+        header['SIND1'] = (Params['dstar'], 'Spectral index of primary')
+        header['SUD1'] = (Params['UDstar'], 'UD diameter of primary')
+
+
+        header['SMOD2'] = 'star'
+        header['SFLU2'] = (Params['fsec'], 'SPARCO flux ratio of secondary')
+        header['SPEC2'] = 'pow'
+        header['SDEX2'] = (Params['xsec'], 'dRA Position of secondary')
+        header['SDEY2'] = (Params['ysec'], 'dDEC position of secondary')
+        header['SIND2'] = (Params['dsec'], 'Spectral index of secondary')
+
+        header['NEPOCHS'] = Params['epochs']
+        header['NRSTARTS'] = Params['nrestart']
+
+
+        #define columns for the losses
+        fdata = np.array(losses[0])
+        frgl = np.array(losses[1])
+        ftot = fdata + mu * frgl
+        colftot = fits.Column(name='ftot', array=ftot, format='E')
+        colfdata = fits.Column(name='fdata', array=fdata, format='E')
+        colfrgl = fits.Column(name='fdiscriminator', array=frgl, format='E')
+        cols = fits.ColDefs([colftot, colfdata, colfrgl])
+
+        headermetrics = fits.Header()
+        headermetrics['TTYPE1'] = 'FTOT'
+        headermetrics['TTYPE2'] = 'FDATA'
+        headermetrics['TTYPE3'] = 'FRGL'
+        headermetrics['MU'] = mu
+
+
+        # Make the headers
+        prihdu = fits.PrimaryHDU(cube, header=header)
+        sechdu = fits.BinTableHDU.from_columns(cols, header=headermetrics, name='METRICS')
+
+
+        hdul = fits.HDUList([prihdu, sechdu])
+
+        hdul.writeto(os.path.join(self.dir,'Cube.fits'), overwrite=True)
+
+
+    def saveCubeOIMAGE(self, cube, losses):
+        Params = self.params
+        mu = Params['mu']
+        npix = self.npix
+
+        header = fits.Header()
+
+        header['SIMPLE'] = 'T'
+        header['BITPIX']  = -64
+
+        header['NAXIS'] = 3
+        header['NAXIS1'] = npix
+        header['NAXIS2']  =  npix
+        header['NAXIS3']  =  Params['nrestart']
+
+        header['EXTEND']  = 'T'
+        header['CRVAL1']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRVAL2']  = (0.0,'Coordinate system value at reference pixel')
+        header['CRPIX1']  =  npix/2
+        header['CRPIX2']  =  npix/2
+        header['CTYPE1']  = ('milliarcsecond', 'RA in mas')
+        header['CTYPE2']  = ('milliarcsecond', 'DEC in mas')
+        header['CDELT1'] = -1 * Params['ps']
+        header['CDELT2'] = Params['ps']
+
+        header['CDELT3']  =  1.
+        header['CTYPE3']  = 'Nrestart'
+
+        header['SWAVE0'] = self.wave0
+        header['SPEC0'] = 'pow'
+        header['SNMODS'] = 2
+        header['SMOD1'] = 'UD'
+        header['SFLU1'] = Params['fstar']
+        header['SPEC1'] = 'pow'
+        header['SDEX1'] = 0
+        header['SDEY1'] = 0
+
+        header['SMOD2'] = 'star'
+        header['SFLU2'] = Params['fsec']
+        header['SPEC2'] = 'pow'
+        header['SDEX2'] = Params['xsec']
+        header['SDEY2'] = Params['ysec']
+
+        header['SDEX1'] = (self.x,'x coordinate of the point source')
+        header['y']= (self.y ,'coordinate of the point source')
+        header['UDf'] = self.UDflux ,'flux contribution of the uniform disk'
+        header['UDd'] = (self.UDdiameter, 'diameter of the point source')
+        header['pf'] = (self.PointFlux,'flux contribution of the point source')
+        header['denv'] = (self.denv,'spectral index of the environment')
+        header['dsec'] = (self.dsec,'spectral index of the point source')
+
+        #define columns for the losses
+        fdata = np.array(losses[0])
+        frgl = np.array(losses[1])
+        ftot = fdata + mu * frgl
+        colftot = fits.Column(name='ftot', array=ftot)
+        colfdata = fits.Column(name='fdata', array=fdata)
+        colfrgl = fits.Column(name='fdiscriminator', array=frgl)
+        cols = fits.ColDefs([colftot, colfdata, colfrgl])
+
+        # define columns for input
+        headerinput = fits.Header()
+        headerinput['TARGET'] = self.data.target
+        headerinput['WAVE_MIN'] = 1
+        headerinput['WAVE_MAX'] = 1
+        headerinput['USE_VIS'] = 'False'
+        headerinput['USE_VIS2'] = 'True'
+        headerinput['USE_T3'] = 'True'
+        headerinput['INIT_IMG'] = 'NA'
+        headerinput['MAXITER'] = self.nrestart
+        headerinput['RGL_NAME'] = self.dispath
+        headerinput['AUTO_WGT'] = 'False'
+        headerinput['RGL_WGT'] = mu
+        headerinput['RGL PRIO'] = ''
+        headerinput['FLUX'] = 1
+        headerinput['FLUXERR'] = 0
+        headerinput['HDUPREFX'] = 'ORANIC_CUBE'
+
+        # Make the headers
+        prihdu = fits.PrimaryHDU(cube,header=header, name='')
+        sechdu = fits.BinTableHDU.from_columns(cols, name='METRICS')
+        inputhdu = fits.BinTableHDU.from_columns(header=headerinput, name='IMAGE-OI INPUT PARAM')
+
+        hdul = fits.HDUList([prihdu, sechdu])
+
+        hdul.writeto(Name+'.fits',overwrite=True)
 
             #y_pred = self.gan.predict(noisevector)[1]
             #self.data_loss([1], y_pred, training = False)
@@ -674,7 +948,7 @@ effect:
         plt.plot(epochs, discloss, label='mu * f_discriminator')
         plt.plot(epochs, np.array(chi2)+np.array(discloss), label='f_tot')
         plt.legend()
-        plt.xlabel('#restart')
+        plt.xlabel('#epochs')
         plt.ylabel('Losses')
         plt.yscale('log')
         plt.tight_layout
@@ -875,7 +1149,44 @@ effect:
                 plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
                 return lossValue, V2loss , CPloss
 
+        def get_chi2( y_pred):
+
+            y_pred = tf.cast((y_pred), tf.complex128)
+            y_pred = tf.signal.ifftshift(y_pred)
+            ftImages = tf.signal.fft2d(y_pred)#is complex!!
+            ftImages = tf.signal.fftshift(ftImages)
+
+            #coordsMax = [[[0,int(npix/2),int(npix/2)]]]
+            #ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
+            VcomplForV2 = compTotalCompVis(ftImages, u, v, waveV2)
+            V2image = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images
+
+
+
+            V2Chi2Terms = K.pow(V2 - V2image,2)/(K.pow(V2e,2)*nV2)# individual terms of chi**2 for V**2
+            #V2Chi2Terms = V2Chi2Terms
+            V2loss = K.sum(V2Chi2Terms, axis=1)
+
+            CPimage  = tf.math.angle(compTotalCompVis(ftImages, u1, v1, waveCP))
+            CPimage += tf.math.angle(compTotalCompVis(ftImages, u2, v2, waveCP))
+            CPimage -= tf.math.angle(compTotalCompVis(ftImages, u3, v3, waveCP))
+            CPchi2Terms = 2*(1-tf.math.cos(CP-CPimage))/(K.pow(CPe,2)*nCP)
+            if useLowCPapprox:
+                CPchi2Terms=K.pow(CP-CPimage, 2)/(K.pow(CPe,2)*nCP)
+
+            CPloss = K.sum(CPchi2Terms, axis=1)
+
+            lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
+            if training == True:
+                #plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
+                return  tf.cast(lossValue, tf.float32)
+
+            else:
+                plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
+                return lossValue, V2loss , CPloss
+
         self.data_loss = data_loss
+        self.get_chi2 = get_chi2
         return data_loss
 
 
@@ -925,6 +1236,8 @@ class Data:
         self.v1 = v1
         self.v2 = v2
         self.v3 = v3
+
+        self.target = data.target[0].target[0]
 
 
     def get_data(self):
