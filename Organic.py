@@ -852,6 +852,15 @@ effect:
 
 
     def saveCubeOIMAGE(self, cube, losses):
+        # First copy the data file to the right directory
+        datafile = os.path.join(os.getcwd(), 'OIData.fits')
+        newfile = os.path.join(os.getcwd(), self.dir, 'Output_data.fits')
+        shutil.copyfile( datafile, newfile)
+
+        # open it and modify it
+        hdul = fits.open(newfile)
+        # copy the data
+
         Params = self.params
         mu = Params['mu']
         npix = self.npix
@@ -1108,18 +1117,6 @@ effect:
             ftImages = tf.signal.fft2d(y_pred)#is complex!!
             ftImages = tf.signal.fftshift(ftImages, axes=(1,2))
 
-            # print(img)
-            # print(img.shape)
-            # fig, [ax1, ax2] = plt.subplots(ncols = 2)
-            # ax1.imshow(img)
-            #
-            # print(ftImages)
-            # print(ftImages.shape)
-            # FTimg = np.array(ftImages[0,:,:,0])
-            # ax2.imshow(np.abs(ftImages))
-            # plt.savefig('showImagesFT.pdf')
-            # plt.close()
-
             coordsMax = [[[[0,int(npix/2),int(npix/2)]]]]
             ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
             VcomplForV2 = compTotalCompVis(ftImages, u, v, waveV2)
@@ -1149,45 +1146,7 @@ effect:
                 plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
                 return lossValue, V2loss , CPloss
 
-        def get_chi2( y_pred):
 
-            y_pred = tf.cast((y_pred), tf.complex128)
-            y_pred = tf.signal.ifftshift(y_pred)
-            ftImages = tf.signal.fft2d(y_pred)#is complex!!
-            ftImages = tf.signal.fftshift(ftImages)
-
-            #coordsMax = [[[0,int(npix/2),int(npix/2)]]]
-            #ftImages =ftImages/tf.cast(tf.math.abs(tf.gather_nd(ftImages,coordsMax)),tf.complex128)
-            VcomplForV2 = compTotalCompVis(ftImages, u, v, waveV2)
-            V2image = tf.math.abs(VcomplForV2)**2# computes squared vis for the generated images
-
-
-
-            V2Chi2Terms = K.pow(V2 - V2image,2)/(K.pow(V2e,2)*nV2)# individual terms of chi**2 for V**2
-            #V2Chi2Terms = V2Chi2Terms
-            V2loss = K.sum(V2Chi2Terms, axis=1)
-
-            CPimage  = tf.math.angle(compTotalCompVis(ftImages, u1, v1, waveCP))
-            CPimage += tf.math.angle(compTotalCompVis(ftImages, u2, v2, waveCP))
-            CPimage -= tf.math.angle(compTotalCompVis(ftImages, u3, v3, waveCP))
-            CPchi2Terms = 2*(1-tf.math.cos(CP-CPimage))/(K.pow(CPe,2)*nCP)
-            if useLowCPapprox:
-                CPchi2Terms=K.pow(CP-CPimage, 2)/(K.pow(CPe,2)*nCP)
-
-            CPloss = K.sum(CPchi2Terms, axis=1)
-
-            lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
-            if training == True:
-                #plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
-                return  tf.cast(lossValue, tf.float32)
-
-            else:
-                plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
-                return lossValue, V2loss , CPloss
-
-        self.data_loss = data_loss
-        self.get_chi2 = get_chi2
-        return data_loss
 
 
 
