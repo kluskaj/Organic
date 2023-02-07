@@ -81,11 +81,12 @@ class GAN:
     The GAN is made from a generator and a discriminator
     """
 
-    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0001, Adam_beta_1=0.91, resetOpt=False):
+    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0001, Adam_beta_1=0.91, resetOpt=False, amsgrad=False):
         self.resetOpt = resetOpt
         self.Adam_lr = Adam_lr
         self.Adam_beta_1 = Adam_beta_1
-        self.opt = self.getOptimizer(self.Adam_lr, self.Adam_beta_1)
+        self.amsgrad = amsgrad
+        self.opt = self.getOptimizer(self.Adam_lr, self.Adam_beta_1, amsgrad = self.amsgrad)
         self.train_disc = train_disc
         self.noiselength = noiselength
         if gen != '' and dis != '':
@@ -101,8 +102,8 @@ class GAN:
 
 
     @staticmethod
-    def getOptimizer(lr, beta1, beta2=0.999, epsilon = 1e-7):
-        return Adam(learning_rate = lr, beta_1 = beta1, beta_2 = beta2, epsilon = epsilon, amsgrad=False)
+    def getOptimizer(lr, beta1, beta2=0.999, epsilon = 1e-7, amsgrad = False):
+        return Adam(learning_rate = lr, beta_1 = beta1, beta_2 = beta2, epsilon = epsilon, amsgrad=amsgrad)
 
     def read(self):
         '''
@@ -117,6 +118,11 @@ class GAN:
         self.gen = gen
         self.dis = dis
         self.npix = gen.output.shape[1]
+        # create copy of generator
+        gen_copy = tf.keras.models.clone_model(gen)
+        gen_copy.set_weights(gen.get_weights())
+        self.gen_init = gen_copy
+
 
 
     def create_generator(self, ReLU=0.25):
@@ -181,14 +187,20 @@ class GAN:
         gan: a compiled keras model where the generator is followed by the discriminator and the discriminator is not trainable
 
     """
-    def create_gan(self, train_disc = False):
+    def create_gan(self, train_disc = False, train_gen = True, reinit = False):
 
+        if reinit:
+            gen = self.gen_init
+        else:
+            gen = self.gen
         self.dis.trainable = train_disc
+        gen.trainable = train_gen
         gan_input = layers.Input(shape = (self.noiselength,))
-        x = self.gen(gan_input)
+        x = gen(gan_input)
         gan_output= self.dis(x)
         gan= Model(inputs=gan_input, outputs=[gan_output, x])
         gan.compile(loss='binary_crossentropy', optimizer = self.opt, metrics=["accuracy"])
+        self.gen = gen
         return gan
 
     '''
@@ -349,9 +361,9 @@ effect:
 
     def save_image_from_noise(self, noise, name='image.pdf'):
 
-
         img = self.get_image(noise)
-        self.plot_image(img, name=name)
+        self.plot_image(img[:,::-1], name=name)
+
 
     def get_random_image(self):
 
@@ -497,6 +509,7 @@ effect:
         self.data = Data(data_dir, data_files)
         self.diagnostics = diagnostics
         self.dir0 = name
+        self.dirorig = os.getcwd()
 
 
         if self.dir0 != '':
@@ -511,7 +524,7 @@ effect:
             warn(f'It may overwrite files if they already exist!')
 
         # copy the data file to the directory
-        shutil.copyfile(os.path.join(data_dir, data_files), os.path.join(os.getcwd(), 'OIData.fits'))
+        # shutil.copyfile(os.path.join(data_dir, data_files), os.path.join(os.getcwd(), 'OIData.fits'))
 
 
         # Creating dictionary with image recsontruction parameters
@@ -568,6 +581,8 @@ effect:
             self.dir = 'ImageRec'
             self.SingleImgRec()
 
+        os.chdir(self.dirorig)
+
     def runGrid(self):
         for i, k in zip(self.iterable, np.arange(self.niters)):
             state = ''
@@ -586,9 +601,7 @@ effect:
                 fail(f'in the ImageReconstruction command')
                 sys.exit(0)
 
-
             inform2(f'Image reconstruction with{state}')
-
 
             self.ImgRec()
 
@@ -606,14 +619,14 @@ effect:
         self.ImgRec()
 
     def ImgRec(self ):
+        # get parameters
         params = self.params
         mu = params['mu']
         #Create data loss
         data_loss = self.set_dataloss()
 
-        # Update GAN
-        GeneratorCopy = tf.keras.models.clone_model(self.gen)
-        GeneratorCopy.set_weights(self.gen.get_weights())
+
+
         outdir = os.path.join(os.getcwd(),self.dir)
 
         Chi2s, DisLoss = [], []
@@ -623,15 +636,15 @@ effect:
         if self.diagnostics:
             print('#restart\tftot\tfdata\tfdiscriminator')
         for r in iteration:
-            #GeneratorCopy.set_weights(Generator.get_weights())
-
-            if self.gan != None:
-                self.gan.get_layer(index=1).set_weights(self.gen.get_weights())
-                if self.resetOpt == True:
-                    opt = 'optimizers.'+self.opt._name
-                    opt = eval(opt)
-                    opt = opt.from_config(self.opt.get_config())
-                    self.gan.compile(loss=[CrossEntropy, data_loss], optimizer= opt,loss_weights=[mu,1])
+            # Re init GAN
+            self.gan = self.create_gan(reinit = True)
+            #self.gan.get_layer(index=1).set_weights(self.gen.get_weights())
+            if self.resetOpt == True:
+                #opt = 'optimizers.'+self.opt._name
+                opt = 'optimizers.'+self.opt.name
+                opt = eval(opt)
+                opt = opt.from_config(self.opt.get_config())
+                self.gan.compile(loss=[CrossEntropy, data_loss], optimizer=opt, loss_weights=[mu,1])
 
             # generating the noise vector for this restart
             noisevector = np.array([np.random.normal(0, 1, 100)])
@@ -647,17 +660,14 @@ effect:
                 hist= self.gan.train_on_batch(noisevector, y_gen)
 
                 if self.diagnostics:
-                    discloss.append( mu*hist[1] )
+                    discloss.append( hist[1] )
                     chi2.append( hist[2] )
-
-
 
             img = self.get_image(noisevector)
             img = (img+1)/2
             if self.diagnostics:
                 self.give_imgrec_diagnostics(hist, chi2, discloss, r, epochs, mu)
-                self.save_image_from_noise(noisevector, name=f'{self.dir}/Image_restart{r}.pdf')
-
+                self.save_image_from_noise(noisevector, name=os.path.join(self.dir,f'Image_restart{r}.pdf') )
             Chi2s.append(hist[2])
             DisLoss.append(hist[1])
             Images.append(img[:,::-1])
@@ -692,7 +702,7 @@ effect:
         # plot image
         self.plot_image(best, name=os.path.join(os.getcwd(),self.dir,'BestImage.pdf'), chi2=f'chi2={fdatabest:.1f}')
         # save image
-        self.imagetofits(median, ftot[id], fdatabest, frglbest, name=os.path.join(os.getcwd(),self.dir,'BestImage.fits'))
+        self.imagetofits(best, ftot[id], fdatabest, frglbest, name=os.path.join(os.getcwd(),self.dir,'BestImage.fits'))
 
 
     def imagetofits(self, image, ftot, fdata, frgl, name='Image.fits'):
@@ -952,10 +962,12 @@ effect:
 
     def give_imgrec_diagnostics(self, hist, chi2, discloss, r, epochs, mu):
         print(r, hist[0], hist[2], mu*hist[1], sep='\t')
+        print(mu)
+        print(discloss)
         fig, ax = plt.subplots()
         plt.plot(epochs, chi2, label='f_data')
-        plt.plot(epochs, discloss, label='mu * f_discriminator')
-        plt.plot(epochs, np.array(chi2)+np.array(discloss), label='f_tot')
+        plt.plot(epochs, mu * discloss, label='mu * f_discriminator')
+        plt.plot(epochs, np.array(chi2)+np.array(mu * discloss), label='f_tot')
         plt.legend()
         plt.xlabel('#epochs')
         plt.ylabel('Losses')
@@ -980,6 +992,7 @@ effect:
 
     def set_dataloss(self):
         data = self.data
+
         if self.boot:
             V2, V2e, CP, CPe, waveV2, waveCP, u, u1, u2, u3, v, v1, v2, v3 = data.get_bootstrap()
         else:
@@ -1138,6 +1151,7 @@ effect:
             CPloss = K.sum(CPchi2Terms, axis=1)
 
             lossValue  = (K.mean(V2loss)*nV2 + K.mean(CPloss)*nCP)/(nV2+nCP)
+
             if training == True:
                 #plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
                 return  tf.cast(lossValue, tf.float32)
@@ -1146,7 +1160,8 @@ effect:
                 plotObservablesComparison(V2image, V2, V2e, CPimage, CP, CPe)
                 return lossValue, V2loss , CPloss
 
-
+        self.data_loss = data_loss
+        return data_loss
 
 
 
@@ -1365,6 +1380,6 @@ class inputImages:
 
 if "__main__" == __name__:
     test = GAN()
-    dir = 'caca/'
-    file = 'pipi'
+    dir = './'
+    file = 'Test'
     imgs = inputImages(dir, file)
