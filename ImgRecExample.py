@@ -1,4 +1,4 @@
-import Organic as org
+import Organic.Organic as org
 import os
 import matplotlib.pyplot as plt
 

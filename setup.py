@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import setuptools
 setuptools.setup(name='OrganicOI',
-version='0.0.22',
+version='0.0.25',
       description='An image reconstuction algorithm using GANs',
       author='Jacques Kluska',
       author_email='jacques.kluska@kuleuven.be',
@@ -12,5 +12,5 @@ version='0.0.22',
         "Operating System :: OS Independent",
         "License :: OSI Approved :: MIT License"
     ),
-    install_requires=['astropy', 'matplotlib', 'numpy', 'scikit-learn', 'scipy', 'keras', 'tensorflow']
+    install_requires=['astropy', 'matplotlib', 'numpy', 'scikit-learn', 'scipy', 'keras', 'tensorflow', 'readoifits']
 )
