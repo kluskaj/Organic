@@ -1187,9 +1187,9 @@ class Data:
         waveV2 = dataObj['wave'][0]
         waveCP = dataObj['wave'][1]
 
-        V2 = tf.constant(V2observed)#conversion to tensor
-        V2err = tf.constant(V2err)#conversion to tensor
-        CP = tf.constant(CPobserved)*np.pi/180 #conversion to radian & cast to tensor
+        V2 = tf.constant(V2observed) # conversion to tensor
+        V2err = tf.constant(V2err) # conversion to tensor
+        CP = tf.constant(CPobserved)*np.pi/180 # conversion to radian & cast to tensor
         CPerr = tf.constant(CPerr)*np.pi/180 #conversion to radian & cast to tensor
         waveV2 = tf.constant(waveV2,dtype = tf.complex128) #conversion to tensor
         waveCP = tf.constant(waveCP,dtype = tf.complex128) #conversion to tensor

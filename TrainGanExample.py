@@ -2,7 +2,7 @@
 #from PIL import Image
 #import numpy as np
 #import matplotlib.pyplot as plt
-import Organic.Organic as org
+import organic.organic as org
 
 
 
