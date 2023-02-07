@@ -640,7 +640,8 @@ effect:
             self.gan = self.create_gan(reinit = True)
             #self.gan.get_layer(index=1).set_weights(self.gen.get_weights())
             if self.resetOpt == True:
-                opt = 'optimizers.'+self.opt._name
+                #opt = 'optimizers.'+self.opt._name
+                opt = 'optimizers.'+self.opt.name
                 opt = eval(opt)
                 opt = opt.from_config(self.opt.get_config())
                 self.gan.compile(loss=[CrossEntropy, data_loss], optimizer=opt, loss_weights=[mu,1])
