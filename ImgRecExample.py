@@ -17,7 +17,7 @@ def main():
     sparco = org.SPARCO(fstar = 0.6179, denv = 0.286, dsec = -2, xsec = -0.36, ysec = -1.33, fsec = 0.0175, UDstar = 0.5)
 
     # Launching image reconstruction
-    test.ImageReconstruction(datafiles, sparco, data_dir = datafolder, mu=[0.1, 1, 10], ps=0.6, diagnostics=False, epochs=50, nrestart=50, name='diagnostics')
+    test.ImageReconstruction(datafiles, sparco, data_dir = datafolder, mu=[0.1, 1, 10], ps=0.6, diagnostics=False, epochs=50, nrestart=50, name='test')
 
 
 if __name__ == "__main__":

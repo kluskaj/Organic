@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import setuptools
 setuptools.setup(name='OrganicOI',
-version='0.0.27',
+version='0.0.28',
       description='An image reconstuction algorithm using GANs',
       author='Jacques Kluska',
       author_email='jacques.kluska@kuleuven.be',
