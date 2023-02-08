@@ -22,6 +22,7 @@ import matplotlib.colors as colors
 from matplotlib.patches import Ellipse
 import sys
 import shutil
+import glob
 mpl.use('Agg')# %matplotlib inline
 
 
@@ -313,7 +314,7 @@ effect:
             if epoch == 1 or epoch % plotEpochs == 0:
                 self.plot_generated_images(epoch)
             if epoch in saveEpochs:
-                self.saveModel(str(e)+'thEpoch.h5')
+                self.saveModel(str(epoch)+'thEpoch.h5')
 
         self.saveModel('finalModel.h5')
         self.plotGanEvolution(disFakeLoss,disRealLoss,genLoss,disFakeAccuracy,genAccuracy)
@@ -955,7 +956,7 @@ effect:
 
         hdul = fits.HDUList([prihdu, sechdu])
 
-        hdul.writeto(Name+'.fits',overwrite=True)
+        hdul.writeto(newfile,overwrite=True)
 
             #y_pred = self.gan.predict(noisevector)[1]
             #self.data_loss([1], y_pred, training = False)
@@ -987,7 +988,7 @@ effect:
         gan = Model(inputs=noise_input, outputs=[gan_output,x])
         losses = [CrossEntropy , self.data_loss]
         mu = self.params['mu']
-        gan.compile(loss=losses, optimizer= opt, loss_weights=[mu,1])
+        gan.compile(loss=losses, optimizer= self.opt, loss_weights=[mu,1])
 
 
     def set_dataloss(self):
@@ -1227,7 +1228,7 @@ class Data:
         newv, newv1, newv2, newv3 = self.v[V2selection], self.v1[CPselection], self.v2[CPselection], self.v3[CPselection]
         newwavelV2 = self.waveV2[V2selection]
         newwavelCP = self.waveCP[CPselection]
-        return newV2, newV2err, newCP, newCPerr, newwaveV2, newwaveCP, newu, newu1, newu2, newu3, newv, newv1, newv2, newv3
+        return newV2, newV2err, newCP, newCPerr, newwavelV2, newwavelCP, newu, newu1, newu2, newu3, newv, newv1, newv2, newv3
 
 
 class SPARCO:
