@@ -81,7 +81,7 @@ class GAN:
     The GAN is made from a generator and a discriminator
     """
 
-    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0001, Adam_beta_1=0.91, resetOpt=False, amsgrad=False):
+    def __init__(self, gen='', dis='', npix=128, train_disc=False, noiselength=100, Adam_lr=0.0001, Adam_beta_1=0.91, resetOpt=True, amsgrad=True):
         self.resetOpt = resetOpt
         self.Adam_lr = Adam_lr
         self.Adam_beta_1 = Adam_beta_1

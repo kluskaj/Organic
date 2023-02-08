@@ -8,7 +8,7 @@ def main():
     dis = os.path.expandvars('theGANextended2/saved_models/discriminatorfinalModel.h5')
     gen = os.path.expandvars('theGANextended2/saved_models/generatorfinalModel.h5')
 
-    test = org.GAN(dis=dis, gen=gen, resetOpt=True)
+    test = org.GAN(dis=dis, gen=gen)
 
     # Data folder and files
     datafolder = '/Users/jacques/Work/IRAS08Var/data/'
