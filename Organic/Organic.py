@@ -491,8 +491,7 @@ effect:
 
 
     def ImageReconstruction(self, data_files, sparco, data_dir='./', mu=1, epochs=50, nrestart=50, boot=False, nboot=100,
-                            ps=0.6, shiftPhotoCenter = True, UseRoll=True,
-                            interp = 'BILINEAR', useLowCPapprox = False, grid = False,
+                            ps=0.6, useLowCPapprox = False, grid = False,
                             diagnostics = False, name=''
                             ):
         self.mu = mu
@@ -503,9 +502,6 @@ effect:
         self.nrestart = nrestart
         self.useLowCPapprox = useLowCPapprox
         self.sparco = sparco
-        self.shiftPhotoCenter = shiftPhotoCenter
-        self.use_roll = UseRoll
-        self.interp = interp
         self.grid = grid
         self.data = Data(data_dir, data_files)
         self.diagnostics = diagnostics
