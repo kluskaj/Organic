@@ -2,6 +2,11 @@
 **O**bject **R**econstruction with **G**enerative **A**dversarial **N**etworks from **I**nterferometri**C** data
 You can find the associated paper [here](https://ui.adsabs.harvard.edu/abs/2020SPIE11446E..1UC/abstract)
 
+## Purpose
+
+The goal of this image reconstruction algorithm is to use an astropbysical Bayeisan prior to reconstruct an image from optical (infrared and visible) interferometric data.
+Neural networks can learn the main characteristics of the image from the models and guide the image reconstruction to a similar images. The data itself can induce more complex features if they are needed to reproduce the data.
+
 ## Installation
 
 To install Organic you should type this in your terminal:
@@ -78,13 +83,37 @@ It will automatically make image reconstructions corresponding to each parameter
 It will create folders for each combination of parameters with the value of the parameters in the name of the folder.
 
 
-## Training the neural network
+## Training the neural network (to be fully developped)
+
+To train a neural network you need to generate many (~1000) images. Then you can ues them to train the neural network. You need to put them in a fits format as cube of images the third dimenstion being the number of images.
+Then you can train your neural network such as indicated in the files `TrainGanExample.py`
+
+1. Initialise the GAN
+
+First you need to initialise an empty GAN:
+```
+mygan = org.GAN()
+```
+
+2. Load your images
+
+The images should be **128 by 128 pixels** (unless you change the shape of the neural network internally...).
+ORGANIC will take care of augmenting your data with random rotations, shifts and rescaling. 
+You can load a cube of images using this command:
+```
+imgs = org.inputImages(dir, file, width_shift_range=0, height_shift_range=0,zoom_range=[0.8,1.3],)
+```
+where:
+`dir` is the directory with the image cube
+`file` is the name of the fits file with the image cube
+`width_shift_range` will shift your image in the horizontal axis by this number of pixels
+`height_shift_range` will shift your image in the vertical axis by this number of pixels
+`zoom_range=[1.8,2.3]` will apply a random zoom factor in this ranges (e.g., smaller than 1 makes your image smaller)
+
+3. Train your GAN
 
 
 
-
-A number of pre-trained GAN are available.
+## Pre-trained GANs
 - **theGANextended2** MCMax model circumstellar disks with extended component /data/leuven/334/vsc33405/summerjobTests/GANspirals/saved_models
 - **GANspirals** geometrical pinwheel nebula models /data/leuven/334/vsc33405/summerjobTests/GANspirals/saved_models
-- **GANstellarSurf** Stellar surface models /data/leuven/334/vsc33405/summerjobTests/GANstellarSurf/saved_models
-- **GANstellarSurf2** Stellar surface models /data/leuven/334/vsc33405/summerjobTests/GANstellarSurf2/saved_models
