@@ -12,11 +12,11 @@ Neural networks can learn the main characteristics of the image from the models 
 To install Organic you should type this in your terminal:
 ```
 conda create -n organic python=3.9
-conda activate
+conda activate organic
 pip install organicoi
 ```
 
-It is strongly advised to also install postOrganic to analyse the outputs from [Organic](https://github.com/kluskaj/postORGANIC).
+It is strongly advised to also install [postOrganic](https://github.com/kluskaj/postORGANIC) to analyse the outputs from [Organic](https://github.com/kluskaj/postORGANIC).
 You can find it [here](https://github.com/kluskaj/postORGANIC)
 
 
@@ -27,6 +27,7 @@ The steps are summarised below:
 
 1.  Loading the Neural Network
 Set the paths and name of the neural network discriminator (`dis`) and generator (`gen`).
+There two pretrained networks in the github repository. One for disks as seen in the near-infrared (in the `theGANextended2` folder) and one for spirals (in the `GANspirals` folder)
 Load the Neural Network:
 ```
 thegan = org.GAN(dis=dis, gen=gen, Adam_lr=0.0001, Adam_beta_1=0.91, amsgrad=True)
