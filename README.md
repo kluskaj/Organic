@@ -27,7 +27,7 @@ The steps are summarised below:
 
 1.  Loading the Neural Network
 Set the paths and name of the neural network discriminator (`dis`) and generator (`gen`).
-There two pretrained networks in the github repository. One for disks as seen in the near-infrared (in the `theGANextended2` folder) and one for spirals (in the `GANspirals` folder)
+There is a pretrained network for disks as seen in the near-infrared (in the `theGANextended2/saved_models` folder).
 Load the Neural Network:
 ```
 thegan = org.GAN(dis=dis, gen=gen, Adam_lr=0.0001, Adam_beta_1=0.91, amsgrad=True)
